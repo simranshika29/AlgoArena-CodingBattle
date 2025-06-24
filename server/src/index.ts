@@ -46,7 +46,12 @@ app.use('/api/users', userRoutes);
 const duelManager = new DuelManager(io);
 
 // MongoDB connection
-const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/algoarena';
+const mongoUri = process.env.MONGODB_URI!;
+if (!mongoUri) {
+  console.error('MONGODB_URI environment variable is required');
+  process.exit(1);
+}
+
 mongoose.connect(mongoUri)
   .then(() => {
     console.log('Connected to MongoDB');
