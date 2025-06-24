@@ -7,6 +7,7 @@ export interface IUser extends mongoose.Document {
   password: string;
   createdAt: Date;
   isAdmin: boolean;
+  duelSolvedProblems: mongoose.Types.ObjectId[]; // Array of problem IDs
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -37,7 +38,12 @@ const userSchema = new mongoose.Schema({
   isAdmin: {
     type: Boolean,
     default: false
-  }
+  },
+  duelSolvedProblems: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Problem',
+    default: []
+  }]
 });
 
 // Hash password before saving

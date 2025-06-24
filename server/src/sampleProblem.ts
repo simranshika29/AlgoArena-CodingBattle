@@ -169,6 +169,172 @@ async function main() {
 
   await Problem.insertMany(moreProblems);
 
+  // 10 Additional sample problems
+  const additionalProblems = [
+    {
+      title: 'Factorial Calculation',
+      description: 'Calculate the factorial of a given non-negative integer n. The factorial of n is the product of all positive integers less than or equal to n.\n\n**Example:**\nInput: 5\nOutput: 120',
+      difficulty: 'easy',
+      testCases: [
+        { input: '5', output: '120', isHidden: false },
+        { input: '0', output: '1', isHidden: false },
+        { input: '1', output: '1', isHidden: false },
+        { input: '10', output: '3628800', isHidden: true }
+      ],
+      timeLimit: 1000,
+      memoryLimit: 256,
+      createdBy: new mongoose.Types.ObjectId(),
+      status: 'approved',
+      acceptedLanguages: ['python', 'java', 'cpp', 'c', 'javascript'],
+    },
+    {
+      title: 'Fibonacci Sequence',
+      description: 'Generate the nth number in the Fibonacci sequence. The Fibonacci sequence is defined as: F(0) = 0, F(1) = 1, and F(n) = F(n-1) + F(n-2) for n > 1.\n\n**Example:**\nInput: 7\nOutput: 13',
+      difficulty: 'easy',
+      testCases: [
+        { input: '7', output: '13', isHidden: false },
+        { input: '0', output: '0', isHidden: false },
+        { input: '1', output: '1', isHidden: false },
+        { input: '10', output: '55', isHidden: true }
+      ],
+      timeLimit: 1000,
+      memoryLimit: 256,
+      createdBy: new mongoose.Types.ObjectId(),
+      status: 'approved',
+      acceptedLanguages: ['python', 'java', 'cpp', 'c', 'javascript'],
+    },
+    {
+      title: 'Prime Number Check',
+      description: 'Determine if a given number is prime. A prime number is a natural number greater than 1 that has no positive divisors other than 1 and itself.\n\n**Example:**\nInput: 17\nOutput: true',
+      difficulty: 'easy',
+      testCases: [
+        { input: '17', output: 'true', isHidden: false },
+        { input: '4', output: 'false', isHidden: false },
+        { input: '2', output: 'true', isHidden: false },
+        { input: '1', output: 'false', isHidden: false },
+        { input: '97', output: 'true', isHidden: true }
+      ],
+      timeLimit: 1000,
+      memoryLimit: 256,
+      createdBy: new mongoose.Types.ObjectId(),
+      status: 'approved',
+      acceptedLanguages: ['python', 'java', 'cpp', 'c', 'javascript'],
+    },
+    {
+      title: 'Binary Search',
+      description: 'Implement binary search to find the index of a target element in a sorted array. If the target is not found, return -1.\n\n**Example:**\nInput: 1 3 5 7 9 11, Target: 7\nOutput: 3',
+      difficulty: 'medium',
+      testCases: [
+        { input: '1 3 5 7 9 11\n7', output: '3', isHidden: false },
+        { input: '1 2 3 4 5\n6', output: '-1', isHidden: false },
+        { input: '1 3 5 7\n1', output: '0', isHidden: false },
+        { input: '2 4 6 8 10\n10', output: '4', isHidden: true }
+      ],
+      timeLimit: 2000,
+      memoryLimit: 256,
+      createdBy: new mongoose.Types.ObjectId(),
+      status: 'approved',
+      acceptedLanguages: ['python', 'java', 'cpp', 'javascript'],
+    },
+    {
+      title: 'Bubble Sort',
+      description: 'Implement bubble sort algorithm to sort an array of integers in ascending order.\n\n**Example:**\nInput: 64 34 25 12 22 11 90\nOutput: 11 12 22 25 34 64 90',
+      difficulty: 'medium',
+      testCases: [
+        { input: '64 34 25 12 22 11 90', output: '11 12 22 25 34 64 90', isHidden: false },
+        { input: '5 2 4 6 1 3', output: '1 2 3 4 5 6', isHidden: false },
+        { input: '1', output: '1', isHidden: false },
+        { input: '3 1 4 1 5 9 2 6', output: '1 1 2 3 4 5 6 9', isHidden: true }
+      ],
+      timeLimit: 2000,
+      memoryLimit: 256,
+      createdBy: new mongoose.Types.ObjectId(),
+      status: 'approved',
+      acceptedLanguages: ['python', 'java', 'cpp', 'c', 'javascript'],
+    },
+    {
+      title: 'Anagram Check',
+      description: 'Determine if two strings are anagrams. An anagram is a word or phrase formed by rearranging the letters of another word or phrase.\n\n**Example:**\nInput: listen silent\nOutput: true',
+      difficulty: 'medium',
+      testCases: [
+        { input: 'listen silent', output: 'true', isHidden: false },
+        { input: 'hello world', output: 'false', isHidden: false },
+        { input: 'anagram nagaram', output: 'true', isHidden: false },
+        { input: 'rat car', output: 'false', isHidden: true }
+      ],
+      timeLimit: 2000,
+      memoryLimit: 256,
+      createdBy: new mongoose.Types.ObjectId(),
+      status: 'approved',
+      acceptedLanguages: ['python', 'java', 'cpp', 'javascript'],
+    },
+    {
+      title: 'Longest Common Subsequence',
+      description: 'Find the length of the longest common subsequence between two strings. A subsequence is a sequence that appears in the same relative order but not necessarily contiguous.\n\n**Example:**\nInput: abcde ace\nOutput: 3',
+      difficulty: 'hard',
+      testCases: [
+        { input: 'abcde ace', output: '3', isHidden: false },
+        { input: 'abc abc', output: '3', isHidden: false },
+        { input: 'abc def', output: '0', isHidden: false },
+        { input: 'abcdgh aedfhr', output: '3', isHidden: true }
+      ],
+      timeLimit: 3000,
+      memoryLimit: 512,
+      createdBy: new mongoose.Types.ObjectId(),
+      status: 'approved',
+      acceptedLanguages: ['python', 'java', 'cpp'],
+    },
+    {
+      title: 'Dijkstra\'s Shortest Path',
+      description: 'Implement Dijkstra\'s algorithm to find the shortest path from a source vertex to all other vertices in a weighted graph.\n\n**Example:**\nInput: 4\n0 4 0 0\n4 0 8 0\n0 8 0 7\n0 0 7 0\n0\nOutput: 0 4 12 19',
+      difficulty: 'hard',
+      testCases: [
+        { input: '4\n0 4 0 0\n4 0 8 0\n0 8 0 7\n0 0 7 0\n0', output: '0 4 12 19', isHidden: false },
+        { input: '3\n0 1 4\n1 0 2\n4 2 0\n0', output: '0 1 3', isHidden: false },
+        { input: '2\n0 5\n5 0\n0', output: '0 5', isHidden: true }
+      ],
+      timeLimit: 5000,
+      memoryLimit: 512,
+      createdBy: new mongoose.Types.ObjectId(),
+      status: 'approved',
+      acceptedLanguages: ['python', 'java', 'cpp'],
+    },
+    {
+      title: 'N-Queens Problem',
+      description: 'Place N queens on an N×N chessboard so that no two queens threaten each other. Return the number of valid solutions.\n\n**Example:**\nInput: 4\nOutput: 2',
+      difficulty: 'hard',
+      testCases: [
+        { input: '4', output: '2', isHidden: false },
+        { input: '1', output: '1', isHidden: false },
+        { input: '2', output: '0', isHidden: false },
+        { input: '8', output: '92', isHidden: true }
+      ],
+      timeLimit: 10000,
+      memoryLimit: 512,
+      createdBy: new mongoose.Types.ObjectId(),
+      status: 'approved',
+      acceptedLanguages: ['python', 'java', 'cpp'],
+    },
+    {
+      title: 'Knapsack Problem',
+      description: 'Given weights and values of n items, put these items in a knapsack of capacity W to get the maximum total value.\n\n**Example:**\nInput: 3 50\n10 60\n20 100\n30 120\nOutput: 220',
+      difficulty: 'hard',
+      testCases: [
+        { input: '3 50\n10 60\n20 100\n30 120', output: '220', isHidden: false },
+        { input: '4 10\n2 3\n3 4\n4 5\n5 6', output: '10', isHidden: false },
+        { input: '1 10\n5 10', output: '10', isHidden: false },
+        { input: '5 15\n1 1\n2 2\n3 3\n4 4\n5 5', output: '15', isHidden: true }
+      ],
+      timeLimit: 5000,
+      memoryLimit: 512,
+      createdBy: new mongoose.Types.ObjectId(),
+      status: 'approved',
+      acceptedLanguages: ['python', 'java', 'cpp'],
+    }
+  ];
+
+  await Problem.insertMany(additionalProblems);
+
   console.log('Sample problem added!');
   await mongoose.disconnect();
 }
