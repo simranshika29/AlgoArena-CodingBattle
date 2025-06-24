@@ -2,6 +2,7 @@ import { Socket, Server } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 import Problem, { IProblem } from '../models/Problem'; // Import Problem model
 import { executeCode } from '../services/codeExecutor'; // Import codeExecutor
+import User from '../models/User'; // Add this import
 
 interface DuelRoom {
   id: string;
@@ -12,7 +13,7 @@ interface DuelRoom {
     isReady: boolean;
     submission?: {
       code: string;
-      language: 'javascript' | 'python' | 'java' | 'cpp';
+      language: 'javascript' | 'python' | 'c' | 'cpp';
       testResults?: any[]; // Store results
       passedAll?: boolean; // Did they pass all tests?
       submissionTime?: number; // Time of submission
@@ -72,8 +73,16 @@ class DuelManager {
     if (!room) return;
 
     try {
-      // Fetch a random approved problem
-      const problems = await Problem.aggregate([{ $match: { status: 'approved' } }, { $sample: { size: 1 } }]);
+      // Fetch both users' duelSolvedProblems
+      const userIds = room.players.map(p => p.userId);
+      const users = await User.find({ _id: { $in: userIds } });
+      const solvedProblemIds = users.flatMap(u => u.duelSolvedProblems.map(id => id.toString()));
+
+      // Fetch a random approved problem NOT in either user's duelSolvedProblems
+      const problems = await Problem.aggregate([
+        { $match: { status: 'approved', _id: { $nin: solvedProblemIds.map(id => new require('mongoose').Types.ObjectId(id)) } } },
+        { $sample: { size: 1 } }
+      ]);
       const problem = problems[0];
 
       if (problem) {
@@ -97,7 +106,7 @@ class DuelManager {
     roomId: string,
     userId: string,
     code: string,
-    language: 'javascript' | 'python' | 'java' | 'cpp',
+    language: 'javascript' | 'python' | 'c' | 'cpp',
     socket: Socket, // Pass socket to emit events back to user/room
     io: Server // Pass io to emit to the room
   ): Promise<void> {
@@ -156,6 +165,13 @@ class DuelManager {
             }
           });
           console.log(`Duel room ${roomId} completed. Winner: ${winnerId} (times: ${t1}ms, ${t2}ms)`);
+
+          // Add problem to both users' duelSolvedProblems
+          const userIds = room.players.map(p => p.userId);
+          await User.updateMany(
+            { _id: { $in: userIds } },
+            { $addToSet: { duelSolvedProblems: room.problem?._id } }
+          );
         } else {
           // Wait for the other player to pass all test cases
           socket.emit('submissionResult', { success: true, message: 'You passed all tests! Waiting for your opponent...', results });
@@ -212,6 +228,26 @@ class DuelManager {
   }
 
   // Add methods for getting room list, getting specific room details etc.
+  getRoomList(): DuelRoom[] {
+    return Array.from(this.rooms.values()).filter(room => room.status === 'waiting');
+  }
+
+  handlePlayerReady(roomId: string, userId: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room || room.status !== 'waiting') return;
+
+    const player = room.players.find(p => p.userId === userId);
+    if (player) {
+      player.isReady = true;
+      this.rooms.set(roomId, room);
+      this.io.to(roomId).emit('duelUpdate', room);
+
+      // Check if both players are ready
+      if (room.players.length === 2 && room.players.every(p => p.isReady)) {
+        this.startDuel(room);
+      }
+    }
+  }
 
   private findRoomBySocketId(socketId: string): DuelRoom | undefined {
     for (const room of this.rooms.values()) {

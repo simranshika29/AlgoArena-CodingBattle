@@ -17,7 +17,7 @@ export interface IProblem extends mongoose.Document {
   createdAt: Date;
   createdBy: mongoose.Types.ObjectId;
   status: 'pending' | 'approved' | 'rejected';
-  acceptedLanguages: ('java' | 'c' | 'cpp' | 'python')[];
+  acceptedLanguages: ('java' | 'c' | 'cpp' | 'python' | 'javascript')[];
 }
 
 const problemSchema = new mongoose.Schema({
@@ -75,7 +75,7 @@ const problemSchema = new mongoose.Schema({
   },
   acceptedLanguages: {
     type: [String],
-    enum: ['java', 'c', 'cpp', 'python'],
+    enum: ['java', 'c', 'cpp', 'python', 'javascript'],
     required: true,
   },
 });
