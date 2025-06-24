@@ -21,7 +21,7 @@ export const authenticateToken = (
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as { userId: string; isAdmin: boolean };
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string; isAdmin: boolean };
     req.user = { userId: decoded.userId, isAdmin: decoded.isAdmin };
     next();
   } catch (error) {

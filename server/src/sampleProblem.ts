@@ -4,10 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 async function main() {
-     await mongoose.connect('mongodb://localhost:27017/algoarena', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  } as any);
+     await mongoose.connect(process.env.MONGODB_URI!);
 
   const sampleProblem = {
     title: 'Sum of Two Numbers',
