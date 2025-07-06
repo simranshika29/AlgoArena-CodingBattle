@@ -11,9 +11,15 @@
   "devDependencies": {
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
+    "@types/socket.io-client": "^1.4.36",
     "concurrently": "^8.2.2"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^5.17.1",
+    "@mui/material": "^5.17.1",
+    "@mui/system": "^5.17.1",
     "socket.io-client": "^4.8.1"
   }
 }

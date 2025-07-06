@@ -20,6 +20,7 @@ async function main() {
     memoryLimit: 256,
     createdBy: new mongoose.Types.ObjectId(), // Replace with a real user ID in production
     status: 'approved',
+    acceptedLanguages: ['java', 'c', 'cpp', 'python'],
   };
 
   await Problem.create(sampleProblem);
