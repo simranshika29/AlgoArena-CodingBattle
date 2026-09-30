@@ -1,9 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "npm ci --prefix client",
-  "buildCommand": "npm run build --prefix client",
-  "outputDirectory": "client/build",
+  "framework": "create-react-app",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "headers": [
     {

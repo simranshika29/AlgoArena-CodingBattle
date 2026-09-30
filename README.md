@@ -159,8 +159,7 @@ algoarena/
 │       ├── seed/              # curated problems, seed + make-admin scripts
 │       └── __tests__/         # Jest test suites
 ├── docs/                      # README assets
-├── render.yaml                # Render blueprint for the API
-└── vercel.json                # Vercel build config for the client
+└── render.yaml                # Render blueprint for the API
 ```
 
 ## API overview
@@ -206,7 +205,7 @@ The API needs a long-running process for WebSockets, so it runs on **Render**; t
 1. **Database**: create a free MongoDB Atlas cluster and a database user, and allow network access from anywhere (`0.0.0.0/0`), since Render's free tier has no static IPs. Copy the connection string.
 2. **API on Render**: *New → Blueprint*, select this repository (it reads `render.yaml`). Set `MONGODB_URI` and `CORS_ORIGIN` (your Vercel URL). `JWT_SECRET` is generated automatically. Health check: `/api/health`.
 3. **Seed**: run `npm run seed` locally with `MONGODB_URI` pointing at Atlas, or `npm run seed:prod` in the Render shell.
-4. **Frontend on Vercel**: import the repository and keep the root directory as the repo root; the root `vercel.json` installs and builds `client/` and rewrites all routes to `index.html` so deep links work. Set `REACT_APP_API_URL` to the Render URL (for example `https://algoarena-api.onrender.com`).
+4. **Frontend on Vercel**: import the repository with **Root Directory = `client`** (or run `vercel deploy --prod` from `client/`), and set `REACT_APP_API_URL` to the Render URL (for example `https://algoarena-api.onrender.com`). `client/vercel.json` rewrites all routes to `index.html` so deep links work.
 5. Update `CORS_ORIGIN` on Render if the Vercel domain changes.
 
 Notes: Render's free tier sleeps after inactivity (the first request can take about 30 s). The public Judge0 CE instance is rate-limited and intended for demos; for real traffic, use a RapidAPI key or self-host Judge0 and set `JUDGE0_URL`/`JUDGE0_API_KEY`.
