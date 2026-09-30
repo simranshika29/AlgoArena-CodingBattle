@@ -247,6 +247,7 @@ The API needs a long-running process for WebSockets, so it runs on **Render**; t
 3. **Seed**: run `npm run seed` locally with `MONGODB_URI` pointing at Atlas, or `npm run seed:prod` in the Render shell.
 4. **Frontend on Vercel**: import the repository with **Root Directory = `client`** (or run `vercel deploy --prod` from `client/`), and set `REACT_APP_API_URL` to the Render URL (for example `https://algoarena-api.onrender.com`). `client/vercel.json` rewrites all routes to `index.html` so deep links work.
 5. Update `CORS_ORIGIN` on Render if the Vercel domain changes.
+6. **Continue with Google**: in Google Cloud Console → Google Auth Platform, configure branding (app name, support email, home page, privacy `/privacy` and terms `/terms` links), set the audience to External and publish, then create a **Web application** OAuth client with the Vercel URL (and `http://localhost:3000` for development) as authorized JavaScript origins. No redirect URI or client secret is needed. Put the client id in `GOOGLE_CLIENT_ID` (it is set in `render.yaml`, since client ids are public).
 
 Live deployment: frontend https://algoarena-codingbattle.vercel.app (auto-deploys from `main`), API https://algoarena-api.onrender.com (auto-deploys from `main`), MongoDB Atlas free cluster.
 
