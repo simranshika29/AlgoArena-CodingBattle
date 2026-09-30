@@ -1,5 +1,6 @@
 import express from 'express';
-import User from '../models/User';
+import User, { toPublicUser } from '../models/User';
+import { codeforcesApi, CodeforcesApiError } from '../services/providers/codeforcesClient';
 import { AuthRequest, authenticateToken } from '../middleware/auth';
 import { asyncHandler, HttpError } from '../middleware/errorHandler';
 import { getLeaderboard, getUserStats } from '../services/stats';
@@ -28,6 +29,37 @@ router.get(
     const userId = req.user!.userId;
     const [stats, rank] = await Promise.all([getUserStats(userId), withRank(userId)]);
     res.json({ ...stats, rank });
+  })
+);
+
+// Link (or clear) a Codeforces handle, verified against the Codeforces API.
+router.put(
+  '/me/codeforces',
+  authenticateToken,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const raw = typeof req.body?.handle === 'string' ? req.body.handle.trim() : '';
+    const user = await User.findById(req.user!.userId);
+    if (!user) throw new HttpError(401, 'Account not found');
+
+    if (!raw) {
+      user.codeforcesHandle = undefined;
+      await user.save();
+      return res.json({ user: toPublicUser(user) });
+    }
+    if (!/^[A-Za-z0-9_.-]{3,24}$/.test(raw)) throw new HttpError(400, 'That is not a valid Codeforces handle');
+
+    let profiles: { handle: string }[];
+    try {
+      profiles = await codeforcesApi<{ handle: string }[]>('user.info', { handles: raw });
+    } catch (error) {
+      if (error instanceof CodeforcesApiError && error.notFound) {
+        throw new HttpError(400, `No Codeforces user named "${raw}"`);
+      }
+      throw new HttpError(503, 'Could not reach Codeforces to verify the handle. Please try again.');
+    }
+    user.codeforcesHandle = profiles[0]?.handle || raw;
+    await user.save();
+    res.json({ user: toPublicUser(user) });
   })
 );
 

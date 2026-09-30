@@ -4,7 +4,11 @@ import bcrypt from 'bcryptjs';
 export interface IUser extends mongoose.Document<mongoose.Types.ObjectId> {
   username: string;
   email: string;
-  password: string;
+  password?: string;
+  /** Google account id ("sub"), set when the user signs in with Google. */
+  googleId?: string;
+  /** Optional Codeforces handle, used to verify solves of Codeforces problems. */
+  codeforcesHandle?: string;
   createdAt: Date;
   isAdmin: boolean;
   /** Problems already used in this user's duels, so rematches get fresh problems. */
@@ -28,12 +32,17 @@ const userSchema = new mongoose.Schema({
     trim: true,
     lowercase: true,
   },
+  // Optional so Google-only accounts can exist; password accounts still require one.
   password: {
     type: String,
-    required: true,
+    required(this: { googleId?: string }) {
+      return !this.googleId;
+    },
     minlength: 6,
     select: false,
   },
+  googleId: { type: String, unique: true, sparse: true },
+  codeforcesHandle: { type: String, trim: true, maxlength: 24 },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -52,7 +61,7 @@ const userSchema = new mongoose.Schema({
 });
 
 userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || !this.password) return next();
 
   try {
     const salt = await bcrypt.genSalt(10);
@@ -64,6 +73,7 @@ userSchema.pre('save', async function (next) {
 });
 
 userSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
+  if (!this.password) return false;
   return bcrypt.compare(candidatePassword, this.password);
 };
 
@@ -74,6 +84,8 @@ export const toPublicUser = (user: IUser) => ({
   email: user.email,
   isAdmin: user.isAdmin,
   createdAt: user.createdAt,
+  googleLinked: Boolean(user.googleId),
+  codeforcesHandle: user.codeforcesHandle || null,
 });
 
 export default mongoose.model<IUser>('User', userSchema);

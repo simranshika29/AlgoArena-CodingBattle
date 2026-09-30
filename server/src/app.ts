@@ -7,6 +7,7 @@ import { errorHandler, notFound } from './middleware/errorHandler';
 import authRoutes from './routes/auth';
 import duelRoutes from './routes/duels';
 import problemRoutes from './routes/problems';
+import problemSetRoutes from './routes/problemSets';
 import submissionRoutes from './routes/submissions';
 import userRoutes from './routes/users';
 
@@ -35,6 +36,7 @@ export const createApp = () => {
   app.use('/api/submissions', submissionRoutes);
   app.use('/api/duels', duelRoutes);
   app.use('/api/users', userRoutes);
+  app.use('/api/problem-sets', problemSetRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

@@ -30,6 +30,7 @@ import logoMark from '../assets/logo-mark.png';
 
 const MAIN_LINKS = [
   { to: '/problems', label: 'Problems' },
+  { to: '/practice', label: 'Practice' },
   { to: '/arena', label: 'Arena' },
   { to: '/leaderboard', label: 'Leaderboard' },
 ];

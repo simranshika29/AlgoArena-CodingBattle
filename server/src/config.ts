@@ -36,6 +36,11 @@ export const config = {
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean),
+  /** OAuth client id for "Continue with Google". Sign-in with Google is disabled when unset. */
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  providers: {
+    codeforces: (process.env.CODEFORCES_ENABLED || 'true') !== 'false',
+  },
   execution: {
     provider: executionProvider,
     judge0Url: (process.env.JUDGE0_URL || 'https://ce.judge0.com').replace(/\/+$/, ''),

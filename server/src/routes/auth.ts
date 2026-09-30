@@ -1,5 +1,8 @@
+import crypto from 'crypto';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
+import { config } from '../config';
+import { InvalidGoogleTokenError, verifyGoogleCredential } from '../services/googleAuth';
 import User, { toPublicUser } from '../models/User';
 import { AuthRequest, authenticateToken, signToken } from '../middleware/auth';
 import { asyncHandler, HttpError } from '../middleware/errorHandler';
@@ -62,10 +65,102 @@ router.post(
     }
 
     const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+password');
+    if (user && !user.password && user.googleId) {
+      throw new HttpError(400, 'This account signs in with Google. Use "Continue with Google".');
+    }
     if (!user || !(await user.comparePassword(password))) {
       throw new HttpError(401, 'Invalid email or password');
     }
 
+    res.json({ token: signToken(user._id.toString()), user: toPublicUser(user) });
+  })
+);
+
+// Public settings the client needs at runtime (the Google client id is not a secret).
+router.get('/config', (_req, res) => {
+  res.json({ googleClientId: config.googleClientId || null });
+});
+
+const requireGoogleConfigured = () => {
+  if (!config.googleClientId) throw new HttpError(503, 'Google sign-in is not configured on this server.');
+};
+
+const readGoogleIdentity = async (credential: unknown) => {
+  if (typeof credential !== 'string' || !credential) throw new HttpError(400, 'Missing Google credential');
+  let identity;
+  try {
+    identity = await verifyGoogleCredential(credential);
+  } catch (error) {
+    if (error instanceof InvalidGoogleTokenError) throw new HttpError(401, 'Google sign-in failed. Please try again.');
+    throw error;
+  }
+  if (!identity.emailVerified) throw new HttpError(401, 'Your Google email address is not verified.');
+  return identity;
+};
+
+/** Builds a free, valid username from the Google account name/email. */
+const uniqueUsername = async (email: string, name: string) => {
+  const clean = (value: string) =>
+    value.replace(/[^a-zA-Z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '').slice(0, 16);
+  let base = clean(email.split('@')[0]) || clean(name) || 'coder';
+  if (base.length < 3) base = `${base}_dev`;
+  let candidate = base;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const taken = await User.exists({ username: { $regex: `^${escapeRegex(candidate)}$`, $options: 'i' } });
+    if (!taken) return candidate;
+    candidate = `${base.slice(0, 15)}_${crypto.randomInt(1000, 10000)}`;
+  }
+  throw new HttpError(500, 'Could not create a username. Please try again.');
+};
+
+// Sign in (or sign up) with a Google Identity Services ID token.
+router.post(
+  '/google',
+  authLimiter,
+  asyncHandler(async (req, res) => {
+    requireGoogleConfigured();
+    const identity = await readGoogleIdentity(req.body?.credential);
+
+    const linked = await User.findOne({ googleId: identity.sub });
+    if (linked) return res.json({ token: signToken(linked._id.toString()), user: toPublicUser(linked) });
+
+    const existing = await User.findOne({ email: identity.email });
+    if (existing) {
+      // Never auto-merge into a password account: the password must be confirmed once,
+      // otherwise whoever registered that email first would share the account.
+      return res.status(409).json({
+        code: 'LINK_REQUIRED',
+        email: identity.email,
+        message: 'An AlgoArena account already uses this email. Enter its password once to link Google sign-in.',
+      });
+    }
+
+    const user = await User.create({
+      username: await uniqueUsername(identity.email, identity.name),
+      email: identity.email,
+      googleId: identity.sub,
+    });
+    res.status(201).json({ token: signToken(user._id.toString()), user: toPublicUser(user) });
+  })
+);
+
+// Link Google to an existing password account (keeps all progress), then sign in.
+router.post(
+  '/google/link',
+  authLimiter,
+  asyncHandler(async (req, res) => {
+    requireGoogleConfigured();
+    const identity = await readGoogleIdentity(req.body?.credential);
+    const { password } = req.body || {};
+    if (typeof password !== 'string' || !password) throw new HttpError(400, 'Enter your AlgoArena password');
+
+    const user = await User.findOne({ email: identity.email }).select('+password');
+    if (!user || !(await user.comparePassword(password))) throw new HttpError(401, 'Incorrect password');
+    if (user.googleId && user.googleId !== identity.sub) {
+      throw new HttpError(409, 'This account is already linked to a different Google account.');
+    }
+    user.googleId = identity.sub;
+    await user.save();
     res.json({ token: signToken(user._id.toString()), user: toPublicUser(user) });
   })
 );

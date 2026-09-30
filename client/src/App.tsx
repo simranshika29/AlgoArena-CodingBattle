@@ -20,6 +20,8 @@ const Leaderboard = lazy(() => import('./pages/Leaderboard'));
 const Arena = lazy(() => import('./pages/Arena'));
 const DuelRoom = lazy(() => import('./pages/DuelRoom'));
 const Contribute = lazy(() => import('./pages/Contribute'));
+const Practice = lazy(() => import('./pages/Practice'));
+const PracticeSetPage = lazy(() => import('./pages/PracticeSetPage'));
 const AdminReview = lazy(() => import('./pages/AdminReview'));
 
 const MyProfileRedirect: React.FC = () => {
@@ -49,6 +51,8 @@ const App: React.FC = () => (
                 <Route path="arena" element={<RequireAuth><Arena /></RequireAuth>} />
                 <Route path="arena/:code" element={<RequireAuth><DuelRoom /></RequireAuth>} />
                 <Route path="contribute" element={<RequireAuth><Contribute /></RequireAuth>} />
+                <Route path="practice" element={<RequireAuth><Practice /></RequireAuth>} />
+                <Route path="practice/:id" element={<RequireAuth><PracticeSetPage /></RequireAuth>} />
                 <Route path="admin/review" element={<RequireAuth admin><AdminReview /></RequireAuth>} />
 
                 {/* Old paths kept working */}

@@ -1,0 +1,500 @@
+{
+ "_source": "Real subset of https://codeforces.com/api/problemset.problems fetched 2026-10-01, used only as test data",
+ "problems": [
+  {
+   "contestId": 1419,
+   "index": "D1",
+   "name": "Sage's Birthday (easy version)",
+   "type": "PROGRAMMING",
+   "points": 750.0,
+   "rating": 1000,
+   "tags": [
+    "binary search",
+    "constructive algorithms",
+    "greedy",
+    "sortings"
+   ]
+  },
+  {
+   "contestId": 1894,
+   "index": "A",
+   "name": "Secret Sport",
+   "type": "PROGRAMMING",
+   "points": 500.0,
+   "rating": 800,
+   "tags": [
+    "implementation",
+    "strings"
+   ]
+  },
+  {
+   "contestId": 1133,
+   "index": "C",
+   "name": "Balanced Team",
+   "type": "PROGRAMMING",
+   "rating": 1200,
+   "tags": [
+    "sortings",
+    "two pointers"
+   ]
+  },
+  {
+   "contestId": 2147,
+   "index": "A",
+   "name": "Shortest Increasing Path",
+   "type": "PROGRAMMING",
+   "points": 500.0,
+   "rating": 800,
+   "tags": [
+    "constructive algorithms",
+    "greedy"
+   ]
+  },
+  {
+   "contestId": 2092,
+   "index": "A",
+   "name": "Kamilka and the Sheep",
+   "type": "PROGRAMMING",
+   "points": 500.0,
+   "rating": 800,
+   "tags": [
+    "greedy",
+    "math",
+    "number theory",
+    "sortings"
+   ]
+  },
+  {
+   "contestId": 411,
+   "index": "A",
+   "name": "Password Check",
+   "type": "PROGRAMMING",
+   "rating": 800,
+   "tags": [
+    "*special",
+    "implementation"
+   ]
+  },
+  {
+   "contestId": 2032,
+   "index": "A",
+   "name": "Circuit",
+   "type": "PROGRAMMING",
+   "points": 500.0,
+   "rating": 800,
+   "tags": [
+    "greedy",
+    "implementation",
+    "math",
+    "number theory"
+   ]
+  },
+  {
+   "contestId": 1250,
+   "index": "F",
+   "name": "Data Center",
+   "type": "PROGRAMMING",
+   "rating": 800,
+   "tags": [
+    "brute force",
+    "implementation"
+   ]
+  },
+  {
+   "contestId": 110,
+   "index": "B",
+   "name": "Lucky String",
+   "type": "PROGRAMMING",
+   "points": 1000.0,
+   "rating": 1100,
+   "tags": [
+    "constructive algorithms",
+    "strings"
+   ]
+  },
+  {
+   "contestId": 2125,
+   "index": "A",
+   "name": "Difficult Contest",
+   "type": "PROGRAMMING",
+   "rating": 800,
+   "tags": [
+    "constructive algorithms",
+    "implementation",
+    "sortings",
+    "strings"
+   ]
+  },
+  {
+   "contestId": 592,
+   "index": "A",
+   "name": "PawnChess",
+   "type": "PROGRAMMING",
+   "points": 500.0,
+   "rating": 1200,
+   "tags": [
+    "implementation"
+   ]
+  },
+  {
+   "contestId": 1738,
+   "index": "B",
+   "name": "Prefix Sum Addicts",
+   "type": "PROGRAMMING",
+   "points": 1000.0,
+   "rating": 1200,
+   "tags": [
+    "constructive algorithms",
+    "greedy",
+    "math",
+    "sortings"
+   ]
+  },
+  {
+   "contestId": 2161,
+   "index": "B",
+   "name": "Make Connected",
+   "type": "PROGRAMMING",
+   "points": 1000.0,
+   "rating": 1700,
+   "tags": [
+    "brute force",
+    "implementation"
+   ]
+  },
+  {
+   "contestId": 2035,
+   "index": "C",
+   "name": "Alya and Permutation",
+   "type": "PROGRAMMING",
+   "points": 1000.0,
+   "rating": 1400,
+   "tags": [
+    "bitmasks",
+    "constructive algorithms",
+    "math"
+   ]
+  },
+  {
+   "contestId": 1010,
+   "index": "C",
+   "name": "Border",
+   "type": "PROGRAMMING",
+   "points": 1000.0,
+   "rating": 1800,
+   "tags": [
+    "number theory"
+   ]
+  },
+  {
+   "contestId": 1063,
+   "index": "A",
+   "name": "Oh Those Palindromes",
+   "type": "PROGRAMMING",
+   "points": 500.0,
+   "rating": 1300,
+   "tags": [
+    "constructive algorithms",
+    "strings"
+   ]
+  },
+  {
+   "contestId": 2072,
+   "index": "D",
+   "name": "For Wizards, the Exam Is Easy, but I Couldn't Handle It",
+   "type": "PROGRAMMING",
+   "rating": 1300,
+   "tags": [
+    "brute force",
+    "greedy",
+    "implementation"
+   ]
+  },
+  {
+   "contestId": 1593,
+   "index": "E",
+   "name": "Gardener and Tree",
+   "type": "PROGRAMMING",
+   "rating": 1600,
+   "tags": [
+    "brute force",
+    "data structures",
+    "dfs and similar",
+    "greedy",
+    "implementation",
+    "trees"
+   ]
+  },
+  {
+   "contestId": 2026,
+   "index": "C",
+   "name": "Action Figures",
+   "type": "PROGRAMMING",
+   "rating": 1500,
+   "tags": [
+    "binary search",
+    "brute force",
+    "constructive algorithms",
+    "data structures",
+    "greedy",
+    "implementation"
+   ]
+  },
+  {
+   "contestId": 650,
+   "index": "B",
+   "name": "Image Preview",
+   "type": "PROGRAMMING",
+   "points": 1000.0,
+   "rating": 1900,
+   "tags": [
+    "binary search",
+    "brute force",
+    "dp",
+    "two pointers"
+   ]
+  },
+  {
+   "contestId": 1042,
+   "index": "D",
+   "name": "Petya and Array",
+   "type": "PROGRAMMING",
+   "points": 2000.0,
+   "rating": 1800,
+   "tags": [
+    "data structures",
+    "divide and conquer",
+    "two pointers"
+   ]
+  },
+  {
+   "contestId": 2108,
+   "index": "B",
+   "name": "SUMdamental Decomposition",
+   "type": "PROGRAMMING",
+   "points": 1250.0,
+   "rating": 1300,
+   "tags": [
+    "bitmasks",
+    "constructive algorithms",
+    "greedy",
+    "implementation",
+    "math"
+   ]
+  },
+  {
+   "contestId": 606,
+   "index": "B",
+   "name": "Testing Robots",
+   "type": "PROGRAMMING",
+   "points": 1000.0,
+   "rating": 1600,
+   "tags": [
+    "implementation"
+   ]
+  },
+  {
+   "contestId": 1934,
+   "index": "C",
+   "name": "Find a Mine",
+   "type": "PROGRAMMING",
+   "points": 1500.0,
+   "rating": 1700,
+   "tags": [
+    "binary search",
+    "constructive algorithms",
+    "geometry",
+    "greedy",
+    "interactive",
+    "math"
+   ]
+  },
+  {
+   "contestId": 1488,
+   "index": "H",
+   "name": "Build From Suffixes",
+   "type": "PROGRAMMING",
+   "rating": 2800,
+   "tags": [
+    "*special",
+    "combinatorics",
+    "data structures"
+   ]
+  },
+  {
+   "contestId": 2063,
+   "index": "F1",
+   "name": "Counting Is Not Fun (Easy Version)",
+   "type": "PROGRAMMING",
+   "points": 1750.0,
+   "rating": 2400,
+   "tags": [
+    "combinatorics",
+    "data structures",
+    "dfs and similar",
+    "dp",
+    "dsu",
+    "graphs",
+    "hashing",
+    "implementation",
+    "math",
+    "trees"
+   ]
+  },
+  {
+   "contestId": 766,
+   "index": "E",
+   "name": "Mahmoud and a xor trip",
+   "type": "PROGRAMMING",
+   "points": 2500.0,
+   "rating": 2100,
+   "tags": [
+    "bitmasks",
+    "constructive algorithms",
+    "data structures",
+    "dfs and similar",
+    "dp",
+    "math",
+    "trees"
+   ]
+  },
+  {
+   "contestId": 2107,
+   "index": "F1",
+   "name": "Cycling (Easy Version)",
+   "type": "PROGRAMMING",
+   "points": 2250.0,
+   "rating": 2300,
+   "tags": [
+    "binary search",
+    "brute force",
+    "dp",
+    "greedy"
+   ]
+  },
+  {
+   "contestId": 1495,
+   "index": "E",
+   "name": "Qingshan and Daniel",
+   "type": "PROGRAMMING",
+   "points": 2500.0,
+   "rating": 3200,
+   "tags": [
+    "brute force",
+    "data structures",
+    "greedy",
+    "implementation"
+   ]
+  },
+  {
+   "contestId": 2118,
+   "index": "E",
+   "name": "Grid Coloring",
+   "type": "PROGRAMMING",
+   "points": 2500.0,
+   "rating": 2400,
+   "tags": [
+    "constructive algorithms",
+    "geometry",
+    "greedy",
+    "math"
+   ]
+  },
+  {
+   "contestId": 1826,
+   "index": "F",
+   "name": "Fading into Fog",
+   "type": "PROGRAMMING",
+   "points": 3000.0,
+   "rating": 2800,
+   "tags": [
+    "geometry",
+    "interactive",
+    "math",
+    "probabilities"
+   ]
+  },
+  {
+   "contestId": 1211,
+   "index": "H",
+   "name": "Road Repair in Treeland",
+   "type": "PROGRAMMING",
+   "rating": 3100,
+   "tags": [
+    "*special",
+    "binary search",
+    "dp",
+    "trees"
+   ]
+  },
+  {
+   "contestId": 13,
+   "index": "D",
+   "name": "Triangles",
+   "type": "PROGRAMMING",
+   "rating": 2600,
+   "tags": [
+    "dp",
+    "geometry"
+   ]
+  },
+  {
+   "contestId": 15,
+   "index": "E",
+   "name": "Triangles",
+   "type": "PROGRAMMING",
+   "rating": 2600,
+   "tags": [
+    "combinatorics",
+    "dp"
+   ]
+  },
+  {
+   "contestId": 1762,
+   "index": "A",
+   "name": "Divide and Conquer",
+   "type": "PROGRAMMING",
+   "points": 500.0,
+   "rating": 800,
+   "tags": [
+    "greedy",
+    "math",
+    "number theory"
+   ]
+  },
+  {
+   "contestId": 2241,
+   "index": "A",
+   "name": "Divide and Conquer",
+   "type": "PROGRAMMING",
+   "rating": 800,
+   "tags": [
+    "greedy",
+    "math",
+    "number theory"
+   ]
+  },
+  {
+   "contestId": 2269,
+   "index": "B",
+   "name": "KiaKio and Squared Numbers",
+   "type": "PROGRAMMING",
+   "points": 1000.0,
+   "tags": [
+    "brute force",
+    "implementation"
+   ]
+  },
+  {
+   "contestId": 2269,
+   "index": "A",
+   "name": "SauSaGe Bank",
+   "type": "PROGRAMMING",
+   "points": 500.0,
+   "tags": [
+    "greedy",
+    "math"
+   ]
+  }
+ ]
+}

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
 import api, { getErrorMessage, setUnauthorizedListener, TOKEN_KEY } from '../api/client';
 import { User } from '../api/types';
 
@@ -11,6 +12,10 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
+  /** Resolves 'signed-in', or 'link-required' when an account with this email must confirm its password first. */
+  loginWithGoogle: (credential: string) => Promise<'signed-in' | 'link-required'>;
+  linkGoogle: (credential: string, password: string) => Promise<void>;
+  updateUser: (user: User) => void;
   logout: () => void;
 }
 
@@ -85,9 +90,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [saveSession]
   );
 
+  const loginWithGoogle = useCallback(
+    async (credential: string) => {
+      try {
+        const { data } = await api.post<{ token: string; user: User }>('/auth/google', { credential });
+        saveSession(data.token, data.user);
+        return 'signed-in' as const;
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 409 && error.response.data?.code === 'LINK_REQUIRED') {
+          return 'link-required' as const;
+        }
+        throw new Error(getErrorMessage(error, 'Google sign-in failed. Please try again.'));
+      }
+    },
+    [saveSession]
+  );
+
+  const linkGoogle = useCallback(
+    async (credential: string, password: string) => {
+      try {
+        const { data } = await api.post<{ token: string; user: User }>('/auth/google/link', { credential, password });
+        saveSession(data.token, data.user);
+      } catch (error) {
+        throw new Error(getErrorMessage(error, 'Could not link your Google account.'));
+      }
+    },
+    [saveSession]
+  );
+
+  const updateUser = useCallback((next: User) => setUser(next), []);
+
   const value = useMemo(
-    () => ({ user, token, status, isAuthenticated: status === 'authenticated', login, register, logout }),
-    [user, token, status, login, register, logout]
+    () => ({
+      user,
+      token,
+      status,
+      isAuthenticated: status === 'authenticated',
+      login,
+      register,
+      loginWithGoogle,
+      linkGoogle,
+      updateUser,
+      logout,
+    }),
+    [user, token, status, login, register, loginWithGoogle, linkGoogle, updateUser, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

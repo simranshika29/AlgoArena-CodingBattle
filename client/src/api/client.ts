@@ -24,7 +24,8 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     const url = error.config?.url || '';
-    if (error.response?.status === 401 && !url.startsWith('/auth/login') && !url.startsWith('/auth/register')) {
+    const isSignInAttempt = ['/auth/login', '/auth/register', '/auth/google'].some((path) => url.startsWith(path));
+    if (error.response?.status === 401 && !isSignInAttempt) {
       onUnauthorized?.();
     }
     return Promise.reject(error);

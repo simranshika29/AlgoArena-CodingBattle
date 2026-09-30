@@ -13,6 +13,7 @@ import {
   Typography,
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
+import GoogleSignIn from '../components/GoogleSignIn';
 import { useAuth } from '../contexts/AuthContext';
 import logoMark from '../assets/logo-mark.png';
 
@@ -120,6 +121,7 @@ export const Login: React.FC = () => {
           {formError}
         </Alert>
       )}
+      <GoogleSignIn onSignedIn={() => navigate(target, { replace: true })} onError={setFormError} />
       <Box component="form" onSubmit={handleSubmit} noValidate>
         <TextField
           label="Email"
@@ -199,6 +201,7 @@ export const Register: React.FC = () => {
           {formError}
         </Alert>
       )}
+      <GoogleSignIn onSignedIn={() => navigate(target, { replace: true })} onError={setFormError} />
       <Box component="form" onSubmit={handleSubmit} noValidate>
         <TextField
           label="Username"

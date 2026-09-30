@@ -14,15 +14,24 @@ export interface User {
   email: string;
   isAdmin: boolean;
   createdAt: string;
+  googleLinked?: boolean;
+  codeforcesHandle?: string | null;
 }
+
+export type SourceId = 'algoarena' | 'codeforces';
 
 export interface ProblemSummary {
   _id: string;
   title: string;
   difficulty: Difficulty;
   tags: string[];
-  acceptedLanguages: Language[];
+  acceptedLanguages?: Language[];
   userStatus?: 'solved' | 'attempted' | null;
+  /** Present when browsing across sources. */
+  source?: SourceId;
+  url?: string;
+  external?: boolean;
+  rating?: number | null;
 }
 
 export interface ProblemPage {
@@ -31,6 +40,7 @@ export interface ProblemPage {
   limit: number;
   total: number;
   totalPages: number;
+  warnings?: string[];
 }
 
 export interface Example {
@@ -39,6 +49,7 @@ export interface Example {
 }
 
 export interface Problem extends ProblemSummary {
+  acceptedLanguages: Language[];
   description: string;
   inputFormat: string;
   outputFormat: string;
@@ -147,4 +158,55 @@ export interface DuelHistoryEntry {
   winner: string | null;
   outcome: 'solved' | 'timeout' | 'forfeit' | 'draw';
   endedAt: string;
+}
+
+export interface ProviderStatus {
+  id: SourceId;
+  name: string;
+  judged: boolean;
+  homepage: string;
+  attribution: string;
+  available: boolean;
+  problemCount: number;
+  fetchedAt: string | null;
+  stale: boolean;
+  error: string | null;
+}
+
+export type SetDifficulty = Difficulty | 'mixed';
+
+export interface PracticeOptions {
+  sources: ProviderStatus[];
+  topics: string[];
+  maxCount: number;
+}
+
+export interface PracticeItem {
+  key: string;
+  source: SourceId;
+  externalId: string;
+  title: string;
+  difficulty: Difficulty;
+  topics: string[];
+  url: string;
+  judged: boolean;
+  rating?: number;
+  status: 'solved' | 'attempted' | null;
+}
+
+export interface PracticeSet {
+  _id: string;
+  criteria: {
+    difficulty: SetDifficulty;
+    topics: string[];
+    count: number;
+    sources: SourceId[];
+    excludeSolved: boolean;
+    avoidRepeats: boolean;
+  };
+  items: PracticeItem[];
+  warnings: string[];
+  solvedCount: number;
+  codeforcesSyncedAt: string | null;
+  createdAt: string;
 }

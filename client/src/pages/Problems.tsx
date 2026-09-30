@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import {
+  Alert,
   Box,
+  Button,
   Container,
   FormControl,
   InputAdornment,
@@ -18,7 +20,9 @@ import {
   TableRow,
   TextField,
   Tooltip,
+  Typography,
 } from '@mui/material';
+import ShuffleIcon from '@mui/icons-material/Shuffle';
 import SearchIcon from '@mui/icons-material/Search';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
@@ -27,6 +31,7 @@ import api, { getErrorMessage } from '../api/client';
 import { ProblemPage } from '../api/types';
 import { DifficultyChip, TagChip } from '../components/Chips';
 import PageHeader from '../components/PageHeader';
+import ProblemTitleLink, { SourceChip } from '../components/ProblemTitleLink';
 import { EmptyState, ErrorState, LoadingState } from '../components/StatusViews';
 import { useAuth } from '../contexts/AuthContext';
 import { colors } from '../theme';
@@ -57,6 +62,11 @@ const Problems: React.FC = () => {
   const difficulty = params.get('difficulty') ?? '';
   const tag = params.get('tag') ?? '';
   const status = params.get('status') ?? '';
+  const source = (['codeforces', 'all'].includes(params.get('source') ?? '') ? params.get('source') : 'algoarena') as
+    | 'algoarena'
+    | 'codeforces'
+    | 'all';
+  const judgedOnly = source === 'algoarena';
   const page = Math.max(1, Number(params.get('page')) || 1);
 
   const [searchInput, setSearchInput] = useState(search);
@@ -94,8 +104,11 @@ const Problems: React.FC = () => {
   }, [searchInput, search, updateParam]);
 
   useEffect(() => {
-    api.get<string[]>('/problems/tags').then((r) => setTags(r.data)).catch(() => setTags([]));
-  }, []);
+    api
+      .get<string[]>('/problems/tags', { params: { source: judgedOnly ? undefined : source } })
+      .then((r) => setTags(r.data))
+      .catch(() => setTags([]));
+  }, [source, judgedOnly]);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -103,7 +116,15 @@ const Problems: React.FC = () => {
     setError('');
     api
       .get<ProblemPage>('/problems', {
-        params: { search: search || undefined, difficulty: difficulty || undefined, tag: tag || undefined, status: status || undefined, page, limit: PAGE_SIZE },
+        params: {
+          source: judgedOnly ? undefined : source,
+          search: search || undefined,
+          difficulty: difficulty || undefined,
+          tag: tag || undefined,
+          status: judgedOnly ? status || undefined : undefined,
+          page,
+          limit: PAGE_SIZE,
+        },
       })
       .then((r) => !cancelled && setData(r.data))
       .catch((e) => !cancelled && setError(getErrorMessage(e, 'Unable to load problems. Please try again.')))
@@ -111,7 +132,7 @@ const Problems: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [search, difficulty, tag, status, page]);
+  }, [source, judgedOnly, search, difficulty, tag, status, page]);
 
   // Wait until we know whether the user is logged in, so solved status is included.
   useEffect(() => {
@@ -119,13 +140,22 @@ const Problems: React.FC = () => {
     return load();
   }, [load, authStatus]);
 
-  const hasFilters = Boolean(search || difficulty || tag || status);
+  const hasFilters = Boolean(search || difficulty || tag || (judgedOnly && status));
 
   return (
     <Container maxWidth="lg">
       <PageHeader
         title="Problems"
-        subtitle={data ? `${pluralize(data.total, 'problem')}${hasFilters ? (data.total === 1 ? ' matches' : ' match') + ' your filters' : ''}` : 'Curated DSA problems, easy to hard'}
+        subtitle={
+          data
+            ? `${pluralize(data.total, 'problem')}${hasFilters ? (data.total === 1 ? ' matches' : ' match') + ' your filters' : ''}`
+            : 'Curated DSA problems, easy to hard'
+        }
+        actions={
+          <Button component={RouterLink} to="/practice" variant="outlined" startIcon={<ShuffleIcon />}>
+            Generate a practice set
+          </Button>
+        }
       />
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
@@ -153,6 +183,18 @@ const Problems: React.FC = () => {
             '& .MuiFormControl-root': { minWidth: { xs: 0, md: 130 } },
           }}
         >
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Source</InputLabel>
+            <Select
+              label="Source"
+              value={source}
+              onChange={(e) => updateParam('source', e.target.value === 'algoarena' ? '' : e.target.value)}
+            >
+              <MenuItem value="algoarena">AlgoArena (judged here)</MenuItem>
+              <MenuItem value="codeforces">Codeforces</MenuItem>
+              <MenuItem value="all">All sources</MenuItem>
+            </Select>
+          </FormControl>
           <FormControl size="small" sx={{ minWidth: 130 }}>
             <InputLabel>Difficulty</InputLabel>
             <Select label="Difficulty" value={difficulty} onChange={(e) => updateParam('difficulty', e.target.value)}>
@@ -173,7 +215,7 @@ const Problems: React.FC = () => {
               ))}
             </Select>
           </FormControl>
-          {isAuthenticated && (
+          {isAuthenticated && judgedOnly && (
             <FormControl size="small" sx={{ minWidth: 130 }}>
               <InputLabel>Status</InputLabel>
               <Select label="Status" value={status} onChange={(e) => updateParam('status', e.target.value)}>
@@ -186,6 +228,12 @@ const Problems: React.FC = () => {
           )}
         </Box>
       </Stack>
+
+      {data?.warnings?.map((warning) => (
+        <Alert key={warning} severity="warning" sx={{ mb: 2 }}>
+          {warning}
+        </Alert>
+      ))}
 
       <Paper sx={{ overflow: 'hidden' }}>
         {loading && !data ? (
@@ -203,6 +251,7 @@ const Problems: React.FC = () => {
               <TableRow>
                 {isAuthenticated && <TableCell sx={{ width: 48 }} aria-label="Status" />}
                 <TableCell>Title</TableCell>
+                {!judgedOnly && <TableCell sx={{ display: { xs: 'none', md: 'table-cell' }, width: 130 }}>Source</TableCell>}
                 <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Topics</TableCell>
                 <TableCell align="right" sx={{ width: 110 }}>
                   Difficulty
@@ -214,18 +263,21 @@ const Problems: React.FC = () => {
                 <TableRow key={problem._id} hover sx={{ '&:last-child td': { border: 0 } }}>
                   {isAuthenticated && (
                     <TableCell sx={{ pr: 0 }}>
-                      <StatusIcon status={problem.userStatus} />
+                      {problem.external ? null : <StatusIcon status={problem.userStatus} />}
                     </TableCell>
                   )}
                   <TableCell>
-                    <Box
-                      component={RouterLink}
-                      to={`/problems/${problem._id}`}
-                      sx={{ color: 'text.primary', textDecoration: 'none', fontWeight: 500, '&:hover': { color: 'primary.main' } }}
-                    >
-                      {problem.title}
-                    </Box>
+                    <ProblemTitleLink
+                      title={problem.title}
+                      url={problem.external && problem.url ? problem.url : `/problems/${problem._id}`}
+                      external={Boolean(problem.external)}
+                    />
                   </TableCell>
+                  {!judgedOnly && (
+                    <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                      <SourceChip source={problem.source ?? 'algoarena'} rating={problem.rating} />
+                    </TableCell>
+                  )}
                   <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                     <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
                       {problem.tags.slice(0, 3).map((t) => (
@@ -242,6 +294,13 @@ const Problems: React.FC = () => {
           </Table>
         )}
       </Paper>
+
+      {!judgedOnly && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
+          Codeforces problem data comes from the official Codeforces API. Statements, submissions and judging stay
+          on codeforces.com; links open there.
+        </Typography>
+      )}
 
       {data && data.totalPages > 1 && (
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>

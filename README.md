@@ -25,6 +25,14 @@
 - **Run** checks your code against the sample tests; **Submit** judges it against every test. Verdicts: Accepted, Wrong Answer, Runtime Error, Time Limit Exceeded, Compilation Error. Hidden test data is never sent to the browser.
 - Per-problem submission history with "load code into editor".
 
+**Practice sets (dynamic, multi-source)**
+- Generate a random set of **1–50 problems** by difficulty (**Easy, Medium, Hard, or Mixed**, which splits evenly), one or more **topics**, and **sources**.
+- Sources: AlgoArena's own problems (judged here) and **11,000+ Codeforces problems** from the official Codeforces API (links out to codeforces.com, credited as the source).
+- Duplicate prevention: problem identity is the source's own id; no two items with the same title in one set; problems from your earlier sets are not repeated (with a clear notice if the pool runs out); already-solved problems are skipped.
+- Link a Codeforces handle (verified through the API) to mark Codeforces problems solved or attempted from your real submissions.
+- Graceful fallback: the Codeforces list is cached in memory and as a MongoDB snapshot. If Codeforces is unreachable, the cached list is used (with a notice); with no cache, that source is skipped and the rest still works.
+- The Problems page can browse **AlgoArena, Codeforces, or all sources** with the same search, difficulty and topic filters.
+
 **Duels (Socket.io)**
 - Create a room and share its six-character code or invite link; the lobby of open rooms updates live.
 - Both players ready up → 5-second countdown → the same random problem, chosen from ones neither player has duelled on.
@@ -34,6 +42,10 @@
 **Progress**
 - Dashboard: solved count, current/longest daily streak, acceptance rate, global rank, duel record, difficulty breakdown, a 12-week activity grid, recent submissions and "next up" suggestions. All of it is computed from real submissions.
 - Public profiles (`/u/:username`) and a leaderboard ranked by distinct problems solved, then duel wins.
+
+**Accounts**
+- Email and password, or **Continue with Google** (Google Identity Services; the ID token is verified on the server).
+- Signing in with Google using an email that already has an AlgoArena password account asks for that password once to link them, then keeps all progress. This prevents account pre-hijacking.
 
 **Community**
 - Any user can contribute a problem (statement, formats, constraints, topics, languages, visible and hidden tests). It stays pending until an admin approves it in the review queue.
@@ -48,6 +60,18 @@
 | Code execution | [Judge0](https://judge0.com) (default) or self-hosted Docker sandboxes |
 | Testing | Jest, Supertest, mongodb-memory-server, socket.io-client, React Testing Library |
 | Deployment | Vercel (frontend), Render (API + WebSockets), MongoDB Atlas |
+
+## Problem sources
+
+| Source | Status | How |
+| --- | --- | --- |
+| AlgoArena | Integrated, judged here | Curated and community problems with hidden tests |
+| Codeforces | Integrated, external | Official API (`problemset.problems`, `user.info`, `user.status`), rate-limited to 1 call per 2 s, cached for 6 h |
+| LeetCode | Not integrated | No official public API, and `robots.txt` disallows `/api/` |
+| HackerRank | Not integrated | No public problem API |
+| CodeChef | Not integrated | The official developer API has been discontinued |
+
+To add a source, implement `ProblemProvider` in `server/src/services/providers/` using the platform's official API and register it in `providers/index.ts`. Problem statements from external sites are never copied; AlgoArena stores only metadata (title, rating, tags, link) with attribution.
 
 ## Architecture
 
@@ -108,6 +132,8 @@ cp client/.env.example client/.env.local
 | `EXECUTION_PROVIDER` | no | `judge0` (default), `docker`, or `disabled` |
 | `JUDGE0_URL` | no | Default `https://ce.judge0.com` (public, rate-limited) |
 | `JUDGE0_API_KEY` | no | RapidAPI key or self-hosted Judge0 auth token |
+| `GOOGLE_CLIENT_ID` | no | OAuth Web client id for "Continue with Google"; the button is hidden when unset |
+| `CODEFORCES_ENABLED` | no | `true` (default) or `false` |
 
 **Client (`client/.env.local`)**
 
@@ -134,7 +160,7 @@ npm run make-admin --prefix server -- you@example.com
 ### Tests
 
 ```bash
-npm test --prefix server   # 26 API, judging, stats and Socket.io duel tests (in-memory MongoDB)
+npm test --prefix server   # 48 tests: API, judging, stats, duels, practice sets, providers, Google sign-in
 npm test --prefix client -- --watchAll=false
 ```
 
@@ -177,7 +203,10 @@ All endpoints are under `/api`. Errors return `{ "message": string }` with an ap
 | POST | `/auth/register` | – | Create account → `{ token, user }` |
 | POST | `/auth/login` | – | Log in → `{ token, user }` |
 | GET | `/auth/me` | user | Current user |
-| GET | `/problems` | optional | List approved problems. Query: `search`, `difficulty`, `tag`, `status`, `page`, `limit` |
+| GET | `/auth/config` | – | Public client settings (Google client id) |
+| POST | `/auth/google` | – | Sign in/up with a Google ID token; `409 LINK_REQUIRED` if a password account uses that email |
+| POST | `/auth/google/link` | – | Link Google to that account after confirming its password |
+| GET | `/problems` | optional | List problems. Query: `source` (`codeforces`, `all`; default AlgoArena only), `search`, `difficulty`, `tag`, `status`, `page`, `limit` |
 | GET | `/problems/tags` | – | Available topics |
 | GET | `/problems/:id` | optional | Problem statement + sample tests (hidden tests are never returned) |
 | POST | `/problems` | user | Contribute a problem (pending review) |
@@ -193,6 +222,12 @@ All endpoints are under `/api`. Errors return `{ "message": string }` with an ap
 | GET | `/users/:username/profile` | – | Public profile + stats |
 | GET | `/users/leaderboard` | – | Ranking |
 | GET | `/duels/history` | user | Your finished duels |
+| GET | `/problem-sets/options` | – | Sources (with live availability), topics, max set size |
+| POST | `/problem-sets` | user | Generate a practice set: `difficulty`, `topics`, `count`, `sources`, `excludeSolved`, `avoidRepeats` |
+| GET | `/problem-sets`, `/problem-sets/:id` | owner | Your sets with per-problem progress |
+| POST | `/problem-sets/:id/sync-codeforces` | owner | Check Codeforces problems against your real submissions |
+| DELETE | `/problem-sets/:id` | owner | Delete a set |
+| PUT | `/users/me/codeforces` | user | Link or unlink a Codeforces handle (verified via the API) |
 
 **Socket.io events** (authenticated with the JWT in `auth.token`; every event replies via acknowledgement with `{ ok, data | error }`):
 `lobby:subscribe`, `duel:active`, `duel:create`, `duel:join {code}`, `duel:ready {code, ready}`, `duel:submit {code, language, source}`, `duel:leave {code}`. The server pushes `duel:update` (room state) and `lobby:rooms`.
@@ -227,6 +262,7 @@ Notes: Render's free tier sleeps after inactivity (the first request can take ab
 ## Future improvements
 
 - Redis-backed duel state for horizontal scaling and restart resilience
+- Add more sources as official APIs become available (see Problem sources)
 - Custom-input runs ("run with my own stdin")
 - Rematch and private best-of-three duels
 - Editorials and discussion per problem

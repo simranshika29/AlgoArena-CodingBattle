@@ -12,7 +12,8 @@
     "lib": [
       "ES2021"
     ],
-    "sourceMap": false
+    "sourceMap": false,
+    "resolveJsonModule": true
   },
   "include": [
     "src/**/*"

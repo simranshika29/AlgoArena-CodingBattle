@@ -5,7 +5,7 @@ import CodeIcon from '@mui/icons-material/Code';
 import BoltIcon from '@mui/icons-material/Bolt';
 import InsightsIcon from '@mui/icons-material/Insights';
 import api from '../api/client';
-import { Difficulty, ProblemPage } from '../api/types';
+import { Difficulty, PracticeOptions, ProblemPage } from '../api/types';
 import { useAuth } from '../contexts/AuthContext';
 import { colors, monoFont } from '../theme';
 
@@ -71,6 +71,7 @@ const EditorPreview: React.FC = () => (
 const Landing: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const [catalog, setCatalog] = useState<{ total: number; byDifficulty: Record<Difficulty, number> } | null>(null);
+  const [externalCount, setExternalCount] = useState(0);
 
   // Real catalogue numbers straight from the API.
   useEffect(() => {
@@ -81,6 +82,10 @@ const Landing: React.FC = () => {
     Promise.all([count(), count('easy'), count('medium'), count('hard')])
       .then(([total, easy, medium, hard]) => setCatalog({ total, byDifficulty: { easy, medium, hard } }))
       .catch(() => setCatalog(null));
+    api
+      .get<PracticeOptions>('/problem-sets/options')
+      .then((r) => setExternalCount(r.data.sources.find((s) => s.id === 'codeforces' && s.available)?.problemCount ?? 0))
+      .catch(() => setExternalCount(0));
   }, []);
 
   const primaryCta = isAuthenticated ? '/dashboard' : '/register';
@@ -130,6 +135,7 @@ const Landing: React.FC = () => {
                 <Box component="span" sx={{ color: colors.easy }}>{catalog.byDifficulty.easy} easy</Box> ·{' '}
                 <Box component="span" sx={{ color: colors.medium }}>{catalog.byDifficulty.medium} medium</Box> ·{' '}
                 <Box component="span" sx={{ color: colors.hard }}>{catalog.byDifficulty.hard} hard</Box>
+                {externalCount > 0 && ` · plus ${externalCount.toLocaleString()} Codeforces problems for practice sets`}
               </Typography>
             )}
           </Box>
