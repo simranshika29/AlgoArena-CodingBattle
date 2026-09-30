@@ -76,8 +76,8 @@
 ### Installation
 
 ```bash
-git clone https://github.com/Atul-Kumar-Git/algoarena.git
-cd algoarena
+git clone https://github.com/simranshika29/AlgoArena-CodingBattle.git
+cd AlgoArena-CodingBattle
 npm run install-all
 ```
 
@@ -227,7 +227,7 @@ Notes: Render's free tier sleeps after inactivity (the first request can take ab
 
 ## Author
 
-**Simran Shikha**
+**Simran Shikha** · [GitHub](https://github.com/simranshika29)
 
 ## License
 
