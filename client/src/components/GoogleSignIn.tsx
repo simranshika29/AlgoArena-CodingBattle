@@ -108,7 +108,8 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignedIn, onError }) => {
         text: 'continue_with',
         shape: 'rectangular',
         logo_alignment: 'left',
-        width: Math.min(buttonRef.current.offsetWidth || 356, 400),
+        // Google's button accepts 200–400px; fit it to the card so it never overflows on phones.
+        width: Math.max(200, Math.min(buttonRef.current.offsetWidth || 300, 400)),
       });
     })();
     return () => {
@@ -134,13 +135,12 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({ onSignedIn, onError }) => {
 
   return (
     <>
-      <Box sx={{ display: enabled ? 'block' : 'none' }}>
-        <Box sx={{ position: 'relative', minHeight: 44, display: 'flex', justifyContent: 'center' }}>
-          <Box ref={buttonRef} sx={{ width: '100%', display: 'flex', justifyContent: 'center', opacity: busy ? 0.5 : 1 }} />
-          {busy && <CircularProgress size={22} sx={{ position: 'absolute', top: 11 }} aria-label="Signing in with Google" />}
-        </Box>
-        <Divider sx={{ my: 2.5, color: 'text.secondary', fontSize: '0.8rem' }}>or use email</Divider>
+      {/* Always laid out (empty until Google loads) so the button can be sized to the real card width. */}
+      <Box sx={{ position: 'relative', minHeight: enabled ? 44 : 0, display: 'flex', justifyContent: 'center' }}>
+        <Box ref={buttonRef} sx={{ width: '100%', display: 'flex', justifyContent: 'center', opacity: busy ? 0.5 : 1 }} />
+        {busy && <CircularProgress size={22} sx={{ position: 'absolute', top: 11 }} aria-label="Signing in with Google" />}
       </Box>
+      {enabled && <Divider sx={{ my: 2.5, color: 'text.secondary', fontSize: '0.8rem' }}>or use email</Divider>}
 
       <Dialog open={Boolean(linkCredential)} onClose={() => !linking && setLinkCredential(null)} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={confirmLink}>
