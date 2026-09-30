@@ -26,3 +26,8 @@ services:
         value: https://ce.judge0.com
       - key: JUDGE0_API_KEY
         sync: false
+      # OAuth Web client id for "Continue with Google" (public by design; no secret needed)
+      - key: GOOGLE_CLIENT_ID
+        value: 684913842051-ehnd2eo06mad20jeshgq7cal88s6u3m9.apps.googleusercontent.com
+      - key: CODEFORCES_ENABLED
+        value: "true"
