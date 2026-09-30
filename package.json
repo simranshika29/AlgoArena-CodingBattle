@@ -1,25 +1,19 @@
 {
   "name": "algoarena",
   "version": "1.0.0",
-  "description": "A competitive coding platform",
+  "private": true,
+  "description": "AlgoArena: a coding practice and real-time 1v1 coding duel platform",
+  "author": "Simran Shikha",
+  "license": "MIT",
   "scripts": {
-    "start": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "cd server && npm run dev",
-    "client": "cd client && npm start",
-    "install-all": "npm install && cd server && npm install && cd ../client && npm install"
+    "install-all": "npm install && npm install --prefix server && npm install --prefix client",
+    "dev": "concurrently -n server,client -c blue,magenta \"npm run dev --prefix server\" \"npm start --prefix client\"",
+    "start": "npm run dev",
+    "seed": "npm run seed --prefix server",
+    "test": "npm test --prefix server && npm test --prefix client -- --watchAll=false",
+    "build": "npm run build --prefix server && npm run build --prefix client"
   },
   "devDependencies": {
-    "@types/react": "^19.1.6",
-    "@types/react-dom": "^19.1.5",
-    "@types/socket.io-client": "^1.4.36",
     "concurrently": "^8.2.2"
-  },
-  "dependencies": {
-    "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.1",
-    "@mui/icons-material": "^5.17.1",
-    "@mui/material": "^5.17.1",
-    "@mui/system": "^5.17.1",
-    "socket.io-client": "^4.8.1"
   }
 }

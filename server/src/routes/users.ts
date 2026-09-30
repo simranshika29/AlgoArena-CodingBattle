@@ -1,52 +1,53 @@
 import express from 'express';
 import User from '../models/User';
-import Submission from '../models/Submission';
-import Problem from '../models/Problem';
+import { AuthRequest, authenticateToken } from '../middleware/auth';
+import { asyncHandler, HttpError } from '../middleware/errorHandler';
+import { getLeaderboard, getUserStats } from '../services/stats';
+import { escapeRegex } from '../utils/validation';
 
 const router = express.Router();
 
-// Portfolio route
-router.get('/:id/portfolio', async (req, res) => {
-  try {
-    const userId = req.params.id;
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+const withRank = async (userId: string) => {
+  const board = await getLeaderboard(Number.MAX_SAFE_INTEGER);
+  return board.find((entry) => entry.userId === userId)?.rank ?? null;
+};
 
-    const totalSubmissions = await Submission.countDocuments({ user: userId });
-    const completedSubmissions = await Submission.countDocuments({ user: userId, status: 'completed' });
+router.get(
+  '/leaderboard',
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '50'), 10) || 50));
+    res.json(await getLeaderboard(limit));
+  })
+);
 
-    // Problems attempted and solved
-    const attemptedProblemIds = await Submission.distinct('problem', { user: userId });
-    const solvedProblemIds = await Submission.distinct('problem', {
-      user: userId,
-      status: 'completed',
-      $expr: { $eq: ['$passedTestCases', '$totalTestCases'] }
-    });
+// Private dashboard statistics for the logged-in user.
+router.get(
+  '/me/stats',
+  authenticateToken,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const userId = req.user!.userId;
+    const [stats, rank] = await Promise.all([getUserStats(userId), withRank(userId)]);
+    res.json({ ...stats, rank });
+  })
+);
 
-    // Get problem titles
-    const attemptedProblems = await Problem.find({ _id: { $in: attemptedProblemIds } }, { _id: 1, title: 1 });
-    const solvedProblems = await Problem.find({ _id: { $in: solvedProblemIds } }, { _id: 1, title: 1 });
+// Public profile: no email or other private fields.
+router.get(
+  '/:username/profile',
+  asyncHandler(async (req, res) => {
+    const username = String(req.params.username || '').slice(0, 20);
+    const user = await User.findOne({ username: { $regex: `^${escapeRegex(username)}$`, $options: 'i' } }).select(
+      'username createdAt'
+    );
+    if (!user) throw new HttpError(404, 'User not found');
 
-    // Language usage breakdown
-    const languageAgg = await Submission.aggregate([
-      { $match: { user: user._id } },
-      { $group: { _id: '$language', count: { $sum: 1 } } }
-    ]);
-    const languageUsage: Record<string, number> = {};
-    languageAgg.forEach(l => { languageUsage[l._id] = l.count; });
-
+    const userId = user._id.toString();
+    const [stats, rank] = await Promise.all([getUserStats(userId), withRank(userId)]);
     res.json({
-      totalSubmissions,
-      completedSubmissions,
-      problemsAttempted: attemptedProblems.length,
-      problemsSolved: solvedProblems.length,
-      attemptedProblems,
-      solvedProblems,
-      languageUsage
+      user: { id: userId, username: user.username, createdAt: user.createdAt },
+      stats: { ...stats, rank },
     });
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch portfolio stats' });
-  }
-});
+  })
+);
 
-export default router; 
+export default router;

@@ -1,331 +1,445 @@
-import { Socket, Server } from 'socket.io';
-import { v4 as uuidv4 } from 'uuid';
-import Problem, { IProblem } from '../models/Problem'; // Import Problem model
-import { executeCode } from '../services/codeExecutor'; // Import codeExecutor
-import User from '../models/User'; // Add this import
+import crypto from 'crypto';
 import mongoose from 'mongoose';
+import { Server, Socket } from 'socket.io';
+import Duel from '../models/Duel';
+import Problem, { Difficulty, toPublicProblem } from '../models/Problem';
+import { sanitizeTestResults } from '../models/Submission';
+import User from '../models/User';
+import { ExecutionUnavailableError, judge } from '../services/execution';
+import { isLanguage, validateCode } from '../utils/validation';
 
-interface DuelRoom {
-  id: string;
-  players: {
-    userId: string;
-    socketId: string;
-    username: string;
-    isReady: boolean;
-    submission?: {
-      code: string;
-      language: 'javascript' | 'python' | 'c' | 'cpp' | 'java';
-      testResults?: any[]; // Store results
-      passedAll?: boolean; // Did they pass all tests?
-      submissionTime?: number; // Time of submission
-    };
-  }[];
-  problem: IProblem | null;
-  status: 'waiting' | 'starting' | 'in-progress' | 'completed';
-  startTime: number | null;
-  winnerId: string | null; // Track winner
+export const DUEL_DURATION_MS: Record<Difficulty, number> = {
+  easy: 10 * 60 * 1000,
+  medium: 20 * 60 * 1000,
+  hard: 30 * 60 * 1000,
+};
+const COUNTDOWN_MS = 5000;
+const RECONNECT_GRACE_MS = 20_000;
+const FINISHED_ROOM_TTL_MS = 5 * 60 * 1000;
+const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+type Phase = 'waiting' | 'countdown' | 'in-progress' | 'finished';
+type Outcome = 'solved' | 'timeout' | 'forfeit' | 'draw';
+
+export interface SocketUser {
+  userId: string;
+  username: string;
 }
 
-class DuelManager {
-  private rooms: Map<string, DuelRoom>;
-  private io: Server;
+interface DuelPlayer extends SocketUser {
+  socketIds: Set<string>;
+  ready: boolean;
+  bestPassed: number;
+  solvedInMs: number | null;
+  submissions: number;
+  judging: boolean;
+  lastVerdict: string | null;
+  disconnectTimer: NodeJS.Timeout | null;
+}
 
-  constructor(io: Server) {
-    this.rooms = new Map();
-    this.io = io;
-  }
+interface DuelRoom {
+  code: string;
+  hostId: string;
+  phase: Phase;
+  players: DuelPlayer[];
+  problem: any | null;
+  countdownEndsAt: number | null;
+  startedAt: number | null;
+  endsAt: number | null;
+  winnerId: string | null;
+  outcome: Outcome | null;
+  createdAt: number;
+  timer: NodeJS.Timeout | null;
+}
 
-  createDuel(player1: { userId: string; username: string }, socket: Socket): DuelRoom {
-    const roomId = uuidv4();
-    const newRoom: DuelRoom = {
-      id: roomId,
-      players: [{ userId: player1.userId, socketId: socket.id, username: player1.username, isReady: false }],
-      problem: null,
-      status: 'waiting',
-      startTime: null,
-      winnerId: null,
+/** Errors whose message is safe to show to the player. */
+export class DuelError extends Error {}
+
+const channel = (code: string) => `duel:${code}`;
+
+export class DuelManager {
+  private rooms = new Map<string, DuelRoom>();
+
+  constructor(private io: Server) {}
+
+  // ---------- Views ----------
+
+  private publicRoom(room: DuelRoom) {
+    const showProblem = room.phase === 'in-progress' || room.phase === 'finished';
+    const total = room.problem?.testCases?.length ?? 0;
+    return {
+      code: room.code,
+      hostId: room.hostId,
+      phase: room.phase,
+      players: room.players.map((p) => ({
+        userId: p.userId,
+        username: p.username,
+        ready: p.ready,
+        connected: p.socketIds.size > 0,
+        bestPassed: p.bestPassed,
+        totalTestCases: total,
+        solved: p.solvedInMs !== null,
+        solvedInMs: p.solvedInMs,
+        submissions: p.submissions,
+        judging: p.judging,
+        lastVerdict: p.lastVerdict,
+      })),
+      problem: showProblem && room.problem ? toPublicProblem(room.problem) : null,
+      countdownEndsAt: room.countdownEndsAt,
+      startedAt: room.startedAt,
+      endsAt: room.endsAt,
+      winnerId: room.winnerId,
+      outcome: room.outcome,
+      serverNow: Date.now(),
     };
-    this.rooms.set(roomId, newRoom);
-    console.log(`Duel room created: ${roomId} by ${player1.username}`);
-    return newRoom;
   }
 
-  async joinDuel(roomId: string, player2: { userId: string; username: string }, socket: Socket): Promise<DuelRoom | null> {
-    const room = this.rooms.get(roomId);
-    if (!room || room.players.length >= 2 || room.status !== 'waiting') {
-      console.log(`Failed to join room ${roomId}: ${!room ? 'not found' : room.players.length >= 2 ? 'full' : 'not waiting'}`);
-      return null;
-    }
+  listOpenRooms() {
+    return [...this.rooms.values()]
+      .filter((room) => room.phase === 'waiting' && room.players.length === 1)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((room) => ({ code: room.code, host: room.players[0].username, createdAt: room.createdAt }));
+  }
 
-    room.players.push({ userId: player2.userId, socketId: socket.id, username: player2.username, isReady: false });
-    room.status = 'starting';
-    this.rooms.set(roomId, room);
-    console.log(`${player2.username} joined room ${roomId}`);
+  private broadcast(room: DuelRoom) {
+    this.io.to(channel(room.code)).emit('duel:update', this.publicRoom(room));
+  }
 
-    // Assign problem and start countdown/duel
-    await this.assignProblem(roomId);
-    // TODO: Implement countdown and transition to 'in-progress'
+  private broadcastLobby() {
+    this.io.to('lobby').emit('lobby:rooms', this.listOpenRooms());
+  }
 
+  // ---------- Helpers ----------
+
+  private newCode(): string {
+    let code: string;
+    do {
+      code = Array.from(crypto.randomBytes(6), (b) => ROOM_CODE_ALPHABET[b % ROOM_CODE_ALPHABET.length]).join('');
+    } while (this.rooms.has(code));
+    return code;
+  }
+
+  private getRoom(code: unknown): DuelRoom {
+    const room = typeof code === 'string' ? this.rooms.get(code.trim().toUpperCase()) : undefined;
+    if (!room) throw new DuelError('Duel room not found. Check the code and try again.');
     return room;
   }
 
-  private async assignProblem(roomId: string): Promise<void> {
-    const room = this.rooms.get(roomId);
-    if (!room) return;
-
-    try {
-      // Get all solved problem IDs from both players
-      const userIds = room.players.map(p => p.userId);
-      const users = await User.find({ _id: { $in: userIds } });
-      const solvedProblemIds: string[] = [];
-      users.forEach(user => {
-        solvedProblemIds.push(...user.duelSolvedProblems.map(id => id.toString()));
-      });
-
-      // Fetch a random approved problem NOT in either user's duelSolvedProblems
-      const problems = await Problem.aggregate([
-        { $match: { status: 'approved', _id: { $nin: solvedProblemIds.map(id => new mongoose.Types.ObjectId(id)) } } },
-        { $sample: { size: 1 } }
-      ]);
-      const problem = problems[0];
-
-      if (problem) {
-        room.problem = problem;
-        room.status = 'in-progress'; // Immediately start after problem assignment for now
-        room.startTime = Date.now();
-        this.rooms.set(roomId, room);
-        // TODO: Emit problem details to the room
-        console.log(`Problem assigned to room ${roomId}`);
-      } else {
-        console.log(`No approved problems found to assign to room ${roomId}`);
-        // TODO: Handle case with no approved problems (e.g., end duel)
-      }
-    } catch (error) {
-      console.error(`Error assigning problem to room ${roomId}:`, error);
-      // TODO: Handle error (e.g., end duel)
-    }
+  private activeRoomFor(userId: string): DuelRoom | undefined {
+    return [...this.rooms.values()].find(
+      (room) => room.phase !== 'finished' && room.players.some((p) => p.userId === userId)
+    );
   }
 
-  async handleSubmission(
-    roomId: string,
-    userId: string,
-    code: string,
-    language: 'javascript' | 'python' | 'c' | 'cpp' | 'java',
-    socket: Socket, // Pass socket to emit events back to user/room
-    io: Server // Pass io to emit to the room
-  ): Promise<void> {
-    const room = this.rooms.get(roomId);
-    const player = room?.players.find(p => p.userId === userId);
+  private attach(room: DuelRoom, player: DuelPlayer, socket: Socket) {
+    player.socketIds.add(socket.id);
+    if (player.disconnectTimer) {
+      clearTimeout(player.disconnectTimer);
+      player.disconnectTimer = null;
+    }
+    socket.join(channel(room.code));
+  }
 
-    if (!room || !player || room.status !== 'in-progress' || player.submission?.passedAll) {
-      console.log(`Submission failed: Room not found, player not in room, duel not in progress, or player already won`);
-      socket.emit('submissionResult', { success: false, message: 'Cannot submit at this time' });
+  private newPlayer(user: SocketUser): DuelPlayer {
+    return {
+      ...user,
+      socketIds: new Set(),
+      ready: false,
+      bestPassed: 0,
+      solvedInMs: null,
+      submissions: 0,
+      judging: false,
+      lastVerdict: null,
+      disconnectTimer: null,
+    };
+  }
+
+  private clearTimer(room: DuelRoom) {
+    if (room.timer) clearTimeout(room.timer);
+    room.timer = null;
+  }
+
+  // ---------- Lifecycle ----------
+
+  active(socket: Socket, user: SocketUser) {
+    const room = this.activeRoomFor(user.userId);
+    if (!room) return null;
+    this.attach(room, room.players.find((p) => p.userId === user.userId)!, socket);
+    return this.publicRoom(room);
+  }
+
+  create(socket: Socket, user: SocketUser) {
+    const existing = this.activeRoomFor(user.userId);
+    if (existing) {
+      this.attach(existing, existing.players.find((p) => p.userId === user.userId)!, socket);
+      return this.publicRoom(existing);
+    }
+
+    const room: DuelRoom = {
+      code: this.newCode(),
+      hostId: user.userId,
+      phase: 'waiting',
+      players: [this.newPlayer(user)],
+      problem: null,
+      countdownEndsAt: null,
+      startedAt: null,
+      endsAt: null,
+      winnerId: null,
+      outcome: null,
+      createdAt: Date.now(),
+      timer: null,
+    };
+    this.rooms.set(room.code, room);
+    this.attach(room, room.players[0], socket);
+    this.broadcastLobby();
+    return this.publicRoom(room);
+  }
+
+  join(socket: Socket, user: SocketUser, code: unknown) {
+    const room = this.getRoom(code);
+    const existingPlayer = room.players.find((p) => p.userId === user.userId);
+
+    if (existingPlayer) {
+      // Rejoining (page refresh, second tab, or navigating back).
+      this.attach(room, existingPlayer, socket);
+      this.broadcast(room);
+      return this.publicRoom(room);
+    }
+
+    if (room.phase === 'finished') {
+      // Spectating a result is harmless; just show it.
+      socket.join(channel(room.code));
+      return this.publicRoom(room);
+    }
+    if (room.phase !== 'waiting' || room.players.length >= 2) {
+      throw new DuelError('This duel is already full or has started.');
+    }
+    const other = this.activeRoomFor(user.userId);
+    if (other) {
+      throw new DuelError(`You are already in duel ${other.code}. Leave it before joining another.`);
+    }
+
+    const player = this.newPlayer(user);
+    room.players.push(player);
+    this.attach(room, player, socket);
+    this.broadcast(room);
+    this.broadcastLobby();
+    return this.publicRoom(room);
+  }
+
+  leave(socket: Socket, user: SocketUser, code: unknown) {
+    const room = this.getRoom(code);
+    socket.leave(channel(room.code));
+    this.removePlayer(room, user.userId);
+  }
+
+  /** Removes a player voluntarily or after their reconnect grace period ran out. */
+  private removePlayer(room: DuelRoom, userId: string) {
+    const player = room.players.find((p) => p.userId === userId);
+    if (!player) return;
+    if (player.disconnectTimer) clearTimeout(player.disconnectTimer);
+
+    if (room.phase === 'in-progress') {
+      const opponent = room.players.find((p) => p.userId !== userId);
+      void this.finish(room, opponent?.userId ?? null, 'forfeit');
+      return;
+    }
+    if (room.phase === 'finished') return;
+
+    // waiting or countdown: drop the player and reset the room.
+    this.clearTimer(room);
+    room.players = room.players.filter((p) => p.userId !== userId);
+    room.players.forEach((p) => (p.ready = false));
+    room.phase = 'waiting';
+    room.problem = null;
+    room.countdownEndsAt = null;
+
+    if (room.players.length === 0) {
+      this.rooms.delete(room.code);
+    } else {
+      room.hostId = room.players[0].userId;
+      this.broadcast(room);
+    }
+    this.broadcastLobby();
+  }
+
+  async setReady(user: SocketUser, code: unknown, ready: boolean) {
+    const room = this.getRoom(code);
+    const player = room.players.find((p) => p.userId === user.userId);
+    if (!player) throw new DuelError('You are not part of this duel.');
+    if (room.phase !== 'waiting') throw new DuelError('The duel has already started.');
+
+    player.ready = ready;
+    this.broadcast(room);
+
+    if (room.players.length === 2 && room.players.every((p) => p.ready)) {
+      await this.startCountdown(room);
+    }
+    return this.publicRoom(room);
+  }
+
+  private async pickProblem(userIds: string[]) {
+    const users = await User.find({ _id: { $in: userIds } }).select('duelSolvedProblems');
+    const used = users.flatMap((u) => u.duelSolvedProblems);
+    const [fresh] = await Problem.aggregate([
+      { $match: { status: 'approved', _id: { $nin: used } } },
+      { $sample: { size: 1 } },
+    ]);
+    if (fresh) return fresh;
+    // Both players have seen everything: allow repeats rather than blocking the duel.
+    const [any] = await Problem.aggregate([{ $match: { status: 'approved' } }, { $sample: { size: 1 } }]);
+    return any ?? null;
+  }
+
+  private async startCountdown(room: DuelRoom) {
+    room.phase = 'countdown';
+    room.countdownEndsAt = null;
+    this.broadcastLobby();
+
+    const problem = await this.pickProblem(room.players.map((p) => p.userId));
+
+    // Someone may have left while we were querying.
+    if (room.phase !== 'countdown' || room.players.length !== 2) return;
+    if (!problem) {
+      room.phase = 'waiting';
+      room.players.forEach((p) => (p.ready = false));
+      this.io.to(channel(room.code)).emit('duel:error', { message: 'No approved problems are available yet.' });
+      this.broadcast(room);
       return;
     }
 
-    // Store submission details
-    player.submission = { code, language, testResults: [], passedAll: false, submissionTime: Date.now() };
-    this.rooms.set(roomId, room);
-    io.to(roomId).emit('duelUpdate', room); // Broadcast submission received
+    room.problem = problem;
+    room.countdownEndsAt = Date.now() + COUNTDOWN_MS;
+    room.timer = setTimeout(() => this.begin(room), COUNTDOWN_MS);
+    this.broadcast(room);
+  }
+
+  private begin(room: DuelRoom) {
+    if (room.phase !== 'countdown') return;
+    const duration = DUEL_DURATION_MS[room.problem.difficulty as Difficulty] ?? DUEL_DURATION_MS.medium;
+    room.phase = 'in-progress';
+    room.startedAt = Date.now();
+    room.endsAt = room.startedAt + duration;
+    room.timer = setTimeout(() => this.finishByTimeout(room), duration);
+    this.broadcast(room);
+  }
+
+  private finishByTimeout(room: DuelRoom) {
+    if (room.phase !== 'in-progress') return;
+    const [a, b] = room.players;
+    if (a.bestPassed === b.bestPassed) void this.finish(room, null, 'draw');
+    else void this.finish(room, a.bestPassed > b.bestPassed ? a.userId : b.userId, 'timeout');
+  }
+
+  private async finish(room: DuelRoom, winnerId: string | null, outcome: Outcome) {
+    if (room.phase === 'finished') return;
+    this.clearTimer(room);
+    room.phase = 'finished';
+    room.winnerId = winnerId;
+    room.outcome = outcome;
+    const endedAt = Date.now();
+    this.broadcast(room);
+    this.broadcastLobby();
+
+    setTimeout(() => {
+      if (this.rooms.get(room.code) === room) this.rooms.delete(room.code);
+    }, FINISHED_ROOM_TTL_MS).unref();
 
     try {
-      // Execute code
-      // Note: executeCode service expects ITestCase[], need to adapt problem.testCases
-      const testCasesForExecution = room.problem?.testCases.map(tc => ({ input: tc.input, output: tc.output, isHidden: tc.isHidden })) || [];
-      const results = await executeCode(code, language, testCasesForExecution);
-
-      const passedAll = results.every(result => result.passed);
-      const submissionTime = Date.now();
-
-      // Update player submission results and time
-      if (player.submission) {
-        player.submission.testResults = results;
-        player.submission.passedAll = passedAll;
-        player.submission.submissionTime = submissionTime;
-      }
-
-      io.to(roomId).emit('duelUpdate', room); // Broadcast results
-
-      if (passedAll) {
-        // Player passed all test cases!
-        // Check if both players have passed all test cases
-        const allPassedPlayers = room.players.filter(p => p.submission && p.submission.passedAll && typeof p.submission.submissionTime === 'number');
-        if (allPassedPlayers.length === 2) {
-          // Both players passed, determine winner by least time
-          const [p1, p2] = allPassedPlayers;
-          const t1 = p1.submission!.submissionTime! - (room.startTime || 0);
-          const t2 = p2.submission!.submissionTime! - (room.startTime || 0);
-          let winnerId = p1.userId;
-          if (t2 < t1) winnerId = p2.userId;
-          room.winnerId = winnerId;
-          room.status = 'completed';
-          this.rooms.set(roomId, room);
-          io.to(room.id).emit('duelEnded', {
-            winnerId,
-            room,
-            times: {
-              [p1.userId]: t1,
-              [p2.userId]: t2
-            }
-          });
-          console.log(`Duel room ${roomId} completed. Winner: ${winnerId} (times: ${t1}ms, ${t2}ms)`);
-
-          // Add problem to both users' duelSolvedProblems
-          const userIds = room.players.map(p => p.userId);
-          await User.updateMany(
-            { _id: { $in: userIds } },
-            { $addToSet: { duelSolvedProblems: room.problem?._id } }
-          );
-        } else {
-          // Wait for the other player to pass all test cases
-          socket.emit('submissionResult', { success: true, message: 'You passed all tests! Waiting for your opponent...', results });
-        }
-      } else {
-        // Player failed some tests
-        socket.emit('submissionResult', { success: false, message: 'Some tests failed.', results });
-      }
-
+      await Duel.create({
+        roomCode: room.code,
+        problem: room.problem._id,
+        players: room.players.map((p) => ({
+          user: new mongoose.Types.ObjectId(p.userId),
+          username: p.username,
+          passedTestCases: p.bestPassed,
+          totalTestCases: room.problem.testCases.length,
+          solvedInMs: p.solvedInMs,
+          submissions: p.submissions,
+        })),
+        winner: winnerId ? new mongoose.Types.ObjectId(winnerId) : null,
+        outcome,
+        startedAt: new Date(room.startedAt ?? endedAt),
+        endedAt: new Date(endedAt),
+      });
+      await User.updateMany(
+        { _id: { $in: room.players.map((p) => p.userId) } },
+        { $addToSet: { duelSolvedProblems: room.problem._id } }
+      );
     } catch (error) {
-      console.error(`Error during code execution for user ${userId} in room ${roomId}:`, error);
-      socket.emit('submissionResult', { success: false, message: 'Code execution failed.', error: (error as Error).message });
-      // Optionally, set player status to indicate error
+      console.error(`Failed to persist duel ${room.code}:`, error);
+    }
+  }
+
+  async submit(user: SocketUser, code: unknown, language: unknown, source: unknown) {
+    const room = this.getRoom(code);
+    const player = room.players.find((p) => p.userId === user.userId);
+    if (!player) throw new DuelError('You are not part of this duel.');
+    if (room.phase !== 'in-progress' || (room.endsAt && Date.now() > room.endsAt)) {
+      throw new DuelError('The duel is not in progress.');
+    }
+    if (player.judging) throw new DuelError('Your previous submission is still being judged.');
+    if (!isLanguage(language) || !room.problem.acceptedLanguages.includes(language)) {
+      throw new DuelError('That language is not accepted for this problem.');
+    }
+    let cleanSource: string;
+    try {
+      cleanSource = validateCode(source);
+    } catch (error) {
+      throw new DuelError((error as Error).message);
+    }
+
+    player.judging = true;
+    this.broadcast(room);
+
+    try {
+      const outcome = await judge(cleanSource, language, room.problem.testCases, room.problem);
+      if (room.phase === 'in-progress') {
+        player.submissions += 1;
+        player.lastVerdict = outcome.verdict;
+        player.bestPassed = Math.max(player.bestPassed, outcome.passed);
+        if (outcome.verdict === 'accepted') {
+          player.solvedInMs = Date.now() - (room.startedAt ?? Date.now());
+          await this.finish(room, player.userId, 'solved');
+        }
+      }
+      return {
+        verdict: outcome.verdict,
+        passedTestCases: outcome.passed,
+        totalTestCases: outcome.total,
+        testResults: sanitizeTestResults(outcome.results),
+      };
+    } catch (error) {
+      if (error instanceof ExecutionUnavailableError) {
+        throw new DuelError('The code runner is temporarily unavailable. Please try again.');
+      }
+      throw error;
     } finally {
-      this.rooms.set(roomId, room);
+      player.judging = false;
+      this.broadcast(room);
     }
   }
 
-  removePlayerFromDuel(socketId: string): void {
-    // Find the room the player is in
-    let roomIdToRemove: string | null = null;
-    let roomToRemove: DuelRoom | null = null;
-
-    for (const [roomId, room] of this.rooms.entries()) {
-      if (room.players.some(player => player.socketId === socketId)) {
-        roomIdToRemove = roomId;
-        roomToRemove = room;
-        break;
-      }
-    }
-
-    if (roomIdToRemove && roomToRemove) {
-      roomToRemove.players = roomToRemove.players.filter(player => player.socketId !== socketId);
-      console.log(`Player with socket ID ${socketId} left room ${roomIdToRemove}. Remaining players: ${roomToRemove.players.length}`);
-
-      // If a player leaves a 2-player duel, end the duel
-      if (roomToRemove.players.length === 1 && roomToRemove.status === 'in-progress') {
-        const remainingPlayer = roomToRemove.players[0];
-        roomToRemove.status = 'completed';
-        roomToRemove.winnerId = remainingPlayer.userId; // Remaining player wins
-        this.rooms.set(roomIdToRemove, roomToRemove);
-        // TODO: Emit duelEnded event to the remaining player
-        console.log(`Duel room ${roomIdToRemove} ended due to player leaving. Winner: ${remainingPlayer.username}`);
-      } else if (roomToRemove.players.length === 0) {
-        // If the last player leaves, remove the room
-        this.rooms.delete(roomIdToRemove);
-        console.log(`Duel room ${roomIdToRemove} removed as all players left.`);
-      } else {
-         // Update room state for remaining players if more than one
-         this.rooms.set(roomIdToRemove, roomToRemove);
-         // TODO: Emit duelUpdate to remaining players
-      }
-    }
-  }
-
-  // Add methods for getting room list, getting specific room details etc.
-  getRoomList(): DuelRoom[] {
-    return Array.from(this.rooms.values()).filter(room => room.status === 'waiting');
-  }
-
-  handlePlayerReady(roomId: string, userId: string): void {
-    const room = this.rooms.get(roomId);
-    if (!room || room.status !== 'waiting') return;
-
-    const player = room.players.find(p => p.userId === userId);
-    if (player) {
-      player.isReady = true;
-      this.rooms.set(roomId, room);
-      this.io.to(roomId).emit('duelUpdate', room);
-
-      // Check if both players are ready
-      if (room.players.length === 2 && room.players.every(p => p.isReady)) {
-        this.startDuel(room);
-      }
-    }
-  }
-
-  private findRoomBySocketId(socketId: string): DuelRoom | undefined {
+  handleDisconnect(socket: Socket, user: SocketUser) {
     for (const room of this.rooms.values()) {
-      if (room.players.some((player: { socketId: string }) => player.socketId === socketId)) {
-        return room;
-      }
-    }
-    return undefined;
-  }
+      const player = room.players.find((p) => p.userId === user.userId);
+      if (!player || !player.socketIds.delete(socket.id) || player.socketIds.size > 0) continue;
+      if (room.phase === 'finished') continue;
 
-  private handleDisconnect(socket: Socket) {
-    console.log('Player disconnected:', socket.id);
-    const room = this.findRoomBySocketId(socket.id);
-    if (room) {
-      const player = room.players.find((p: { socketId: string }) => p.socketId === socket.id);
-      if (player) {
-        if (room.status === 'waiting') {
-          // Remove player from room if duel hasn't started
-          room.players = room.players.filter((p: { socketId: string }) => p.socketId !== socket.id);
-          if (room.players.length === 0) {
-            // If room is empty, remove it
-            this.rooms.delete(room.id);
-          } else {
-            // Notify remaining player
-            const remainingPlayer = room.players[0];
-            const remainingSocket = this.io.sockets.sockets.get(remainingPlayer.socketId);
-            if (remainingSocket) {
-              remainingSocket.emit('duelUpdate', room);
-            }
-          }
-        } else if (room.status === 'in-progress') {
-          // Mark disconnected player as loser
-          const remainingPlayer = room.players.find((p: { socketId: string }) => p.socketId !== socket.id);
-          if (remainingPlayer) {
-            room.winnerId = remainingPlayer.userId;
-            room.status = 'completed';
-            // Notify remaining player
-            const remainingSocket = this.io.sockets.sockets.get(remainingPlayer.socketId);
-            if (remainingSocket) {
-              remainingSocket.emit('duelEnded', { winnerId: remainingPlayer.userId, room });
-            }
-          }
-        }
-      }
+      this.broadcast(room);
+      player.disconnectTimer = setTimeout(() => {
+        player.disconnectTimer = null;
+        if (player.socketIds.size === 0) this.removePlayer(room, player.userId);
+      }, RECONNECT_GRACE_MS);
     }
   }
 
-  private async startDuel(room: DuelRoom) {
-    try {
-      // Get a random approved problem
-      const problem = await Problem.findOne({ status: 'approved' }).exec();
-      if (!problem) {
-        // No approved problems available
-        this.io.to(room.id).emit('duelError', { message: 'No approved problems available. Please try again later.' });
-        return;
-      }
-
-      room.problem = problem;
-      room.status = 'starting';
-      room.startTime = Date.now();
-      this.io.to(room.id).emit('duelUpdate', room);
-
-      // Start countdown
-      setTimeout(() => {
-        if (room.status === 'starting') {
-          room.status = 'in-progress';
-          this.io.to(room.id).emit('duelUpdate', room);
-        }
-      }, 5000); // 5-second countdown
-    } catch (error) {
-      console.error('Error starting duel:', error);
-      this.io.to(room.id).emit('duelError', { message: 'Error starting duel. Please try again.' });
+  /** Test/shutdown helper. */
+  shutdown() {
+    for (const room of this.rooms.values()) {
+      this.clearTimer(room);
+      room.players.forEach((p) => p.disconnectTimer && clearTimeout(p.disconnectTimer));
     }
+    this.rooms.clear();
   }
 }
-
-export { DuelManager }; 

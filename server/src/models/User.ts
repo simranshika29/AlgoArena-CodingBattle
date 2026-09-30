@@ -1,13 +1,14 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-export interface IUser extends mongoose.Document {
+export interface IUser extends mongoose.Document<mongoose.Types.ObjectId> {
   username: string;
   email: string;
   password: string;
   createdAt: Date;
   isAdmin: boolean;
-  duelSolvedProblems: mongoose.Types.ObjectId[]; // Array of problem IDs
+  /** Problems already used in this user's duels, so rematches get fresh problems. */
+  duelSolvedProblems: mongoose.Types.ObjectId[];
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -17,39 +18,42 @@ const userSchema = new mongoose.Schema({
     required: true,
     unique: true,
     trim: true,
-    minlength: 3
+    minlength: 3,
+    maxlength: 20,
   },
   email: {
     type: String,
     required: true,
     unique: true,
     trim: true,
-    lowercase: true
+    lowercase: true,
   },
   password: {
     type: String,
     required: true,
-    minlength: 6
+    minlength: 6,
+    select: false,
   },
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
   isAdmin: {
     type: Boolean,
-    default: false
+    default: false,
   },
-  duelSolvedProblems: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Problem',
-    default: []
-  }]
+  duelSolvedProblems: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Problem',
+      default: [],
+    },
+  ],
 });
 
-// Hash password before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
-  
+
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
@@ -59,9 +63,17 @@ userSchema.pre('save', async function(next) {
   }
 });
 
-// Compare password method
-userSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
+userSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-export default mongoose.model<IUser>('User', userSchema); 
+/** Fields that are safe to send to the owning user. */
+export const toPublicUser = (user: IUser) => ({
+  id: user._id.toString(),
+  username: user.username,
+  email: user.email,
+  isAdmin: user.isAdmin,
+  createdAt: user.createdAt,
+});
+
+export default mongoose.model<IUser>('User', userSchema);

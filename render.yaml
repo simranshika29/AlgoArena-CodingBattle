@@ -1,0 +1,28 @@
+# Render Blueprint for the AlgoArena API (Express + Socket.io).
+# The frontend is deployed separately on Vercel (see README).
+services:
+  - type: web
+    name: algoarena-api
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false # set in the Render dashboard (MongoDB Atlas connection string)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ORIGIN
+        sync: false # e.g. https://your-app.vercel.app
+      - key: EXECUTION_PROVIDER
+        value: judge0
+      - key: JUDGE0_URL
+        value: https://ce.judge0.com
+      - key: JUDGE0_API_KEY
+        sync: false

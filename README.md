@@ -1,225 +1,234 @@
-# AlgoArena
+<p align="center">
+  <img src="docs/logo.png" alt="AlgoArena logo" width="160" />
+</p>
 
-A competitive coding platform where users can practice coding problems, participate in coding battles (duels), and improve their algorithmic skills.
+<h1 align="center">AlgoArena</h1>
+
+<p align="center">
+  A coding practice platform with real-time 1v1 coding duels.<br/>
+  Solve DSA problems in the browser, get judged against hidden test cases in a sandbox, and race a friend to the first accepted solution.
+</p>
+
+---
 
 ## Features
 
-- **User Authentication** - Secure signup/login with JWT
-- **Problem Practice** - Solve coding problems with multiple test cases
-- **Real-time Code Execution** - Submit code and get instant feedback
-- **Coding Duels** - Challenge other users in real-time coding battles
-- **Problem Submission** - Users can submit their own problems (admin approval required)
-- **Portfolio** - Track your progress and statistics
-- **Admin Panel** - Review and approve submitted problems
+**Practice**
+- 31 curated problems (easy → hard) with input/output formats, constraints, examples and hidden tests. Every test case is verified against reference solutions.
+- Search, difficulty, topic and solved/attempted/unsolved filters with pagination; filter state lives in the URL, so views are shareable.
+- Monaco editor with Python, JavaScript, C++, C and Java starter templates; drafts autosave per problem and language in the browser.
+- **Run** checks your code against the sample tests; **Submit** judges it against every test. Verdicts: Accepted, Wrong Answer, Runtime Error, Time Limit Exceeded, Compilation Error. Hidden test data is never sent to the browser.
+- Per-problem submission history with "load code into editor".
 
-## Tech Stack
+**Duels (Socket.io)**
+- Create a room and share its six-character code or invite link; the lobby of open rooms updates live.
+- Both players ready up → 5-second countdown → the same random problem, chosen from ones neither player has duelled on.
+- Difficulty-based timer (10/20/30 min), a live scoreboard (tests passed, submissions, judging state, connection state), and a server-authoritative result: first full pass wins, otherwise the most tests passed at time-out, otherwise a draw. Leaving or staying disconnected for 20 s forfeits; a page refresh reconnects you to the same duel.
+- Finished duels are stored for history and the leaderboard.
 
-- **Frontend**: React 19 with TypeScript, Material-UI
-- **Backend**: Node.js with Express, TypeScript
-- **Database**: MongoDB
-- **Authentication**: JWT (JSON Web Tokens)
-- **Real-time**: Socket.io for duels
-- **Code Execution**: Docker for safe code execution
-- **Deployment**: Railway (backend), Vercel (frontend)
+**Progress**
+- Dashboard: solved count, current/longest daily streak, acceptance rate, global rank, duel record, difficulty breakdown, a 12-week activity grid, recent submissions and "next up" suggestions. All of it is computed from real submissions.
+- Public profiles (`/u/:username`) and a leaderboard ranked by distinct problems solved, then duel wins.
 
-## Project Structure
+**Community**
+- Any user can contribute a problem (statement, formats, constraints, topics, languages, visible and hidden tests). It stays pending until an admin approves it in the review queue.
+
+## Tech stack
+
+| Layer | Technologies |
+| --- | --- |
+| Frontend | React 19, TypeScript, Material UI 5, React Router 7, Monaco Editor, Axios, Socket.io client (Create React App) |
+| Backend | Node.js, Express 4, TypeScript, Socket.io 4, JWT auth, bcrypt, Helmet, express-rate-limit |
+| Database | MongoDB with Mongoose 8 |
+| Code execution | [Judge0](https://judge0.com) (default) or self-hosted Docker sandboxes |
+| Testing | Jest, Supertest, mongodb-memory-server, socket.io-client, React Testing Library |
+| Deployment | Vercel (frontend), Render (API + WebSockets), MongoDB Atlas |
+
+## Architecture
 
 ```
-algoarena/
-├── client/             # React frontend
-│   ├── src/
-│   │   ├── components/ # React components
-│   │   ├── contexts/   # React contexts (Auth)
-│   │   └── config.ts   # Configuration
-│   └── package.json
-├── server/             # Node.js backend
-│   ├── src/
-│   │   ├── routes/     # API routes
-│   │   ├── models/     # MongoDB models
-│   │   ├── duels/      # Duel management
-│   │   └── services/   # Code execution service
-│   └── package.json
-└── README.md
+            ┌───────────────────────────┐      HTTPS (REST)       ┌────────────────────────────┐
+ Browser ──▶│ React SPA (Vercel)        │ ───────────────────────▶│ Express API (Render)       │
+            │ - Axios API client + JWT  │                         │ - /api/auth, problems,     │
+            │ - one shared Socket.io    │ ◀──── WebSocket ───────▶│   submissions, users, duels│
+            │   connection for duels    │                         │ - Socket.io DuelManager    │
+            └───────────────────────────┘                         └──────┬──────────────┬──────┘
+                                                                         │              │
+                                                              Mongoose   │              │ HTTPS
+                                                                         ▼              ▼
+                                                                 ┌──────────────┐ ┌──────────────┐
+                                                                 │ MongoDB Atlas│ │ Judge0 sandbox│
+                                                                 └──────────────┘ └──────────────┘
 ```
 
-## Local Development Setup
+- **Auth**: passwords are hashed with bcrypt; the API issues a JWT that the client sends as a Bearer token. Socket connections authenticate with the same JWT during the handshake, so duel actions can't be spoofed with another user's id. Admin rights are checked against the database on every admin request.
+- **Judging**: `services/execution` defines an `ExecutionProvider` interface. The Judge0 provider sends each test case with CPU/wall/memory limits (interpreted languages get 2–3× time, as on most judges); the Docker provider runs throwaway containers with no network, a read-only filesystem, dropped capabilities, a non-root user, and memory/CPU/PID limits. Outputs are compared after normalising line endings and trailing whitespace. User code never runs inside the API process.
+- **Duels**: live rooms are held in memory in `DuelManager` (single API instance); results are written to MongoDB when a duel ends.
+- **Stats**: dashboard, profile and leaderboard numbers are MongoDB aggregations over submissions and finished duels, with no stored counters that can drift.
+
+## Getting started
 
 ### Prerequisites
-
-- Node.js (v18 or higher)
-- MongoDB (local or MongoDB Atlas)
-- Docker (for code execution)
+- Node.js 18.18+ (tested with Node 22)
+- A MongoDB database: local `mongod` or a free [MongoDB Atlas](https://www.mongodb.com/atlas) cluster
+- Internet access for the default Judge0 code runner (or Docker for the self-hosted runner)
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/simranshika29/algoarena.git
-   cd algoarena
-   ```
+```bash
+git clone https://github.com/Atul-Kumar-Git/algoarena.git
+cd algoarena
+npm run install-all
+```
 
-2. **Install dependencies**
-   ```bash
-   # Install all dependencies (root, server, and client)
-   npm run install-all
-   
-   # Or install separately:
-   npm install                    # Root dependencies
-   cd server && npm install       # Server dependencies
-   cd ../client && npm install    # Client dependencies
-   ```
+### Environment variables
 
-3. **Set up environment variables**
+Copy the examples and fill in values:
 
-   Create `server/.env` file:
-   ```env
-   MONGODB_URI=mongodb://localhost:27017/algoarena
-   JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-   PORT=5000
-   NODE_ENV=development
-   CORS_ORIGIN=http://localhost:3000
-   ```
+```bash
+cp server/.env.example server/.env
+cp client/.env.example client/.env.local
+```
 
-   Create `client/.env` file (optional for local development):
-   ```env
-   REACT_APP_API_URL=http://localhost:5000
-   REACT_APP_SOCKET_URL=http://localhost:5000
-   ```
+**Server (`server/.env`)**
 
-4. **Start MongoDB**
-   ```bash
-   # If using local MongoDB
-   mongod
-   
-   # Or use MongoDB Atlas (cloud)
-   ```
+| Variable | Required | Description |
+| --- | --- | --- |
+| `MONGODB_URI` | yes | MongoDB connection string |
+| `JWT_SECRET` | yes | Long random string for signing tokens (≥ 32 chars in production) |
+| `JWT_EXPIRES_IN` | no | Token lifetime, default `7d` |
+| `PORT` | no | Default `5000` |
+| `NODE_ENV` | no | `development` / `production` |
+| `CORS_ORIGIN` | yes in prod | Comma-separated allowed frontend origins |
+| `EXECUTION_PROVIDER` | no | `judge0` (default), `docker`, or `disabled` |
+| `JUDGE0_URL` | no | Default `https://ce.judge0.com` (public, rate-limited) |
+| `JUDGE0_API_KEY` | no | RapidAPI key or self-hosted Judge0 auth token |
 
-5. **Start the development servers**
-   ```bash
-   # From root directory - starts both server and client
-   npm start
-   
-   # Or start separately:
-   npm run server    # Backend on http://localhost:5000
-   npm run client    # Frontend on http://localhost:3000
-   ```
+**Client (`client/.env.local`)**
 
-6. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:5000
+| Variable | Description |
+| --- | --- |
+| `REACT_APP_API_URL` | API base URL, e.g. `http://localhost:5000` |
+| `REACT_APP_SOCKET_URL` | Optional; defaults to `REACT_APP_API_URL` |
+
+Client variables are compiled into public JavaScript, so never put secrets there.
+
+### Running locally
+
+```bash
+npm run seed        # load the curated problem set (safe to re-run; it upserts)
+npm run dev         # API on :5000 and React app on :3000
+```
+
+To make a registered user an admin (for the review queue):
+
+```bash
+npm run make-admin --prefix server -- you@example.com
+```
+
+### Tests
+
+```bash
+npm test --prefix server   # 26 API, judging, stats and Socket.io duel tests (in-memory MongoDB)
+npm test --prefix client -- --watchAll=false
+```
+
+## Project structure
+
+```
+algoarena/
+├── client/                    # React SPA
+│   ├── public/                # index.html, icons, manifest
+│   └── src/
+│       ├── api/               # Axios client + shared API types
+│       ├── components/        # Layout, editor, statement, result panel, stats widgets…
+│       ├── contexts/          # AuthContext (session), SocketContext (one duel socket)
+│       ├── pages/             # Landing, Problems, ProblemDetail, Dashboard, Arena, DuelRoom…
+│       ├── utils/             # languages/starter code, formatting
+│       └── theme.ts           # MUI theme and design tokens
+├── server/                    # Express + Socket.io API
+│   └── src/
+│       ├── app.ts             # Express app (routes, security middleware)
+│       ├── index.ts           # HTTP + Socket.io bootstrap
+│       ├── config.ts          # validated environment config
+│       ├── duels/             # DuelManager + socket handlers
+│       ├── middleware/        # auth, error handling
+│       ├── models/            # User, Problem, Submission, Duel
+│       ├── routes/            # auth, problems, submissions, users, duels
+│       ├── services/          # execution providers (Judge0/Docker), stats
+│       ├── seed/              # curated problems, seed + make-admin scripts
+│       └── __tests__/         # Jest test suites
+├── docs/                      # README assets
+└── render.yaml                # Render blueprint for the API
+```
+
+## API overview
+
+All endpoints are under `/api`. Errors return `{ "message": string }` with an appropriate status code.
+
+| Method | Endpoint | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/health` | – | Liveness + database status |
+| POST | `/auth/register` | – | Create account → `{ token, user }` |
+| POST | `/auth/login` | – | Log in → `{ token, user }` |
+| GET | `/auth/me` | user | Current user |
+| GET | `/problems` | optional | List approved problems. Query: `search`, `difficulty`, `tag`, `status`, `page`, `limit` |
+| GET | `/problems/tags` | – | Available topics |
+| GET | `/problems/:id` | optional | Problem statement + sample tests (hidden tests are never returned) |
+| POST | `/problems` | user | Contribute a problem (pending review) |
+| GET | `/problems/contributions/mine` | user | Your contributed problems and their status |
+| GET | `/problems/admin/pending` | admin | Review queue |
+| PATCH | `/problems/admin/:id/approve` · `/reject` | admin | Moderate a contribution |
+| PUT / DELETE | `/problems/:id` | admin | Edit / delete a problem |
+| POST | `/submissions/run` | user | Run code on sample tests (not saved) |
+| POST | `/submissions` | user | Judge on all tests and save |
+| GET | `/submissions/mine` | user | Your submissions (`problemId`, `limit`) |
+| GET | `/submissions/:id` | owner | Submission details including code |
+| GET | `/users/me/stats` | user | Dashboard statistics |
+| GET | `/users/:username/profile` | – | Public profile + stats |
+| GET | `/users/leaderboard` | – | Ranking |
+| GET | `/duels/history` | user | Your finished duels |
+
+**Socket.io events** (authenticated with the JWT in `auth.token`; every event replies via acknowledgement with `{ ok, data | error }`):
+`lobby:subscribe`, `duel:active`, `duel:create`, `duel:join {code}`, `duel:ready {code, ready}`, `duel:submit {code, language, source}`, `duel:leave {code}`. The server pushes `duel:update` (room state) and `lobby:rooms`.
+
+Execution endpoints are rate-limited per user (12/min) and auth endpoints per IP (30 per 15 min).
+
+## Screenshots
+
+_Add screenshots to `docs/` and reference them here:_ landing page, problem workspace, dashboard, duel room.
 
 ## Deployment
 
-### Quick Deploy to Railway + Vercel
+The API needs a long-running process for WebSockets, so it runs on **Render**; the static SPA runs on **Vercel**.
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
+1. **Database**: create a free MongoDB Atlas cluster, a database user, and allow network access from Render (`0.0.0.0/0` on the free tier). Copy the connection string.
+2. **API on Render**: *New → Blueprint*, select this repository (it reads `render.yaml`). Set `MONGODB_URI` and `CORS_ORIGIN` (your Vercel URL). `JWT_SECRET` is generated automatically. Health check: `/api/health`.
+3. **Seed**: in the Render shell, run `npm run seed:prod`.
+4. **Frontend on Vercel**: import the repository with **Root Directory = `client`**, and set `REACT_APP_API_URL` to the Render URL (for example `https://algoarena-api.onrender.com`). `client/vercel.json` rewrites all routes to `index.html` so deep links work.
+5. Update `CORS_ORIGIN` on Render if the Vercel domain changes.
 
-**Quick Steps:**
+Notes: Render's free tier sleeps after inactivity (the first request can take about 30 s). The public Judge0 CE instance is rate-limited and intended for demos; for real traffic, use a RapidAPI key or self-host Judge0 and set `JUDGE0_URL`/`JUDGE0_API_KEY`.
 
-1. **Deploy Backend to Railway**
-   - Connect GitHub repo to Railway
-   - Set root directory to `server`
-   - Add environment variables
-   - Deploy
+## Known limitations
 
-2. **Deploy Frontend to Vercel**
-   - Connect GitHub repo to Vercel
-   - Set root directory to `client`
-   - Add environment variables (API URL from Railway)
-   - Deploy
+- Live duel rooms live in memory, so the API must run as a single instance, and a restart ends in-progress duels. Scaling out would need the Socket.io Redis adapter plus shared room state.
+- The default Judge0 instance is a shared public service; judging speed and availability depend on it.
+- The Docker execution provider is included for self-hosting, but it is not exercised by the automated tests.
+- Tokens are stored in `localStorage`; httpOnly cookies would reduce XSS exposure.
 
-3. **Configure Environment Variables**
+## Future improvements
 
-   **Railway (Backend):**
-   ```env
-   MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/algoarena
-   JWT_SECRET=your-production-jwt-secret
-   NODE_ENV=production
-   CORS_ORIGIN=https://your-frontend-url.vercel.app
-   PORT=5000
-   ```
+- Redis-backed duel state for horizontal scaling and restart resilience
+- Custom-input runs ("run with my own stdin")
+- Rematch and private best-of-three duels
+- Editorials and discussion per problem
+- Email verification and password reset
 
-   **Vercel (Frontend):**
-   ```env
-   REACT_APP_API_URL=https://your-backend-url.railway.app
-   REACT_APP_SOCKET_URL=https://your-backend-url.railway.app
-   ```
+## Author
 
-## API Endpoints
-
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login user
-
-### Problems
-- `GET /api/problems` - Get all problems
-- `GET /api/problems/:id` - Get problem by ID
-- `POST /api/problems` - Submit new problem (requires auth)
-- `GET /api/problems/admin/pending` - Get pending problems (admin only)
-- `PATCH /api/problems/admin/:id/approve` - Approve problem (admin only)
-- `PATCH /api/problems/admin/:id/reject` - Reject problem (admin only)
-
-### Submissions
-- `POST /api/submissions` - Submit code for a problem
-- `GET /api/submissions` - Get user's submissions
-
-### Duels
-- Socket.io events for real-time duels
-- `createDuel` - Create a new duel room
-- `joinDuel` - Join an existing duel
-- `submitCode` - Submit code during duel
-
-## Environment Variables
-
-### Server (.env)
-- `MONGODB_URI` - MongoDB connection string
-- `JWT_SECRET` - Secret key for JWT tokens
-- `PORT` - Server port (default: 5000)
-- `NODE_ENV` - Environment (development/production)
-- `CORS_ORIGIN` - Allowed CORS origin
-
-### Client (.env)
-- `REACT_APP_API_URL` - Backend API URL
-- `REACT_APP_SOCKET_URL` - Socket.io server URL
-
-## Scripts
-
-### Root
-- `npm start` - Start both server and client
-- `npm run server` - Start server only
-- `npm run client` - Start client only
-- `npm run install-all` - Install all dependencies
-
-### Server
-- `npm run dev` - Start development server
-- `npm run build` - Build TypeScript to JavaScript
-- `npm start` - Start production server
-- `npm run populate` - Populate database with sample problems
-
-### Client
-- `npm start` - Start development server
-- `npm run build` - Build for production
-- `npm test` - Run tests
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+**Simran Shikha**
 
 ## License
 
-MIT License - see LICENSE file for details
-
-## Support
-
-For issues and questions, please open an issue on GitHub.
-
-## Acknowledgments
-
-- Material-UI for the UI components
-- MongoDB for the database
-- Socket.io for real-time features
-- Railway and Vercel for hosting
+[MIT](LICENSE)

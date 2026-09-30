@@ -1,150 +1,172 @@
 import express from 'express';
-import Problem from '../models/Problem';
-import { authenticateToken, isAdmin, AuthRequest } from '../middleware/auth';
+import mongoose from 'mongoose';
+import Problem, { DIFFICULTIES, toPublicProblem } from '../models/Problem';
+import { AuthRequest, authenticateToken, isUserAdmin, optionalAuth, requireAdmin } from '../middleware/auth';
+import { asyncHandler, HttpError } from '../middleware/errorHandler';
+import { getAttemptedProblemIds, getSolvedProblemIds } from '../services/stats';
+import { escapeRegex, isDifficulty, isObjectId, validateProblemInput } from '../utils/validation';
 
 const router = express.Router();
 
-// Get all problems (only approved)
-router.get('/', async (req, res) => {
-  try {
-    const { difficulty, search } = req.query;
-    const query: any = { status: 'approved' };
+const LIST_PROJECTION = { title: 1, difficulty: 1, tags: 1, acceptedLanguages: 1, createdAt: 1 };
 
-    if (difficulty) {
-      query.difficulty = difficulty;
-    }
+// List approved problems with search, filters, pagination, and per-user solve status.
+router.get(
+  '/',
+  optionalAuth,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const { difficulty, search, tag, status } = req.query;
+    const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || '20'), 10) || 20));
 
-    if (search) {
+    const query: Record<string, any> = { status: 'approved' };
+    if (isDifficulty(difficulty)) query.difficulty = difficulty;
+    if (typeof tag === 'string' && tag) query.tags = tag.toLowerCase();
+    if (typeof search === 'string' && search.trim()) {
+      const pattern = escapeRegex(search.trim().slice(0, 100));
       query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
+        { title: { $regex: pattern, $options: 'i' } },
+        { tags: { $regex: pattern, $options: 'i' } },
       ];
     }
 
-    const problems = await Problem.find(query)
-      .select('-testCases.isHidden')
-      .sort({ createdAt: -1 });
-
-    res.json(problems);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching problems', error: (error as Error).message });
-  }
-});
-
-// Get single problem
-router.get('/:id', async (req, res) => {
-  try {
-    const problem = await Problem.findById(req.params.id)
-      .select('-testCases.isHidden');
-    
-    if (!problem) {
-      return res.status(404).json({ message: 'Problem not found' });
+    let solved = new Set<string>();
+    let attempted = new Set<string>();
+    if (req.user) {
+      const [solvedIds, attemptedIds] = await Promise.all([
+        getSolvedProblemIds(req.user.userId),
+        getAttemptedProblemIds(req.user.userId),
+      ]);
+      solved = new Set(solvedIds);
+      attempted = new Set(attemptedIds);
+      const toIds = (ids: string[]) => ids.map((id) => new mongoose.Types.ObjectId(id));
+      if (status === 'solved') query._id = { $in: toIds(solvedIds) };
+      else if (status === 'unsolved') query._id = { $nin: toIds(solvedIds) };
+      else if (status === 'attempted') query._id = { $in: toIds(attemptedIds.filter((id) => !solved.has(id))) };
     }
 
-    res.json(problem);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching problem', error: (error as Error).message });
-  }
-});
+    const [problems, total] = await Promise.all([
+      Problem.aggregate([
+        { $match: query },
+        // Sort easy → medium → hard (alphabetical order would put hard before medium).
+        { $addFields: { difficultyRank: { $indexOfArray: [[...DIFFICULTIES], '$difficulty'] } } },
+        { $sort: { difficultyRank: 1, createdAt: 1, _id: 1 } },
+        { $skip: (page - 1) * limit },
+        { $limit: limit },
+        { $project: LIST_PROJECTION },
+      ]),
+      Problem.countDocuments(query),
+    ]);
 
-// Create new problem (user or admin, always pending)
-router.post('/', authenticateToken, async (req: AuthRequest, res) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-    const problem = new Problem({
-      ...req.body,
-      createdBy: req.user.userId,
-      status: 'pending'
+    res.json({
+      problems: problems.map((p: { _id: mongoose.Types.ObjectId }) => {
+        const id = p._id.toString();
+        return {
+          ...p,
+          userStatus: solved.has(id) ? 'solved' : attempted.has(id) ? 'attempted' : null,
+        };
+      }),
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
     });
+  })
+);
 
-    await problem.save();
-    res.status(201).json(problem);
-  } catch (error) {
-    res.status(500).json({ message: 'Error creating problem', error: (error as Error).message });
-  }
-});
+router.get(
+  '/tags',
+  asyncHandler(async (_req, res) => {
+    const tags = await Problem.distinct('tags', { status: 'approved' });
+    res.json(tags.sort());
+  })
+);
 
-// Update problem (admin only)
-router.put('/:id', authenticateToken, async (req, res) => {
-  try {
-    const problem = await Problem.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
+router.get(
+  '/contributions/mine',
+  authenticateToken,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const problems = await Problem.find({ createdBy: req.user!.userId })
+      .select('title difficulty status createdAt')
+      .sort({ createdAt: -1 });
+    res.json(problems);
+  })
+);
 
-    if (!problem) {
-      return res.status(404).json({ message: 'Problem not found' });
+router.get(
+  '/admin/pending',
+  authenticateToken,
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    const pending = await Problem.find({ status: 'pending' })
+      .populate('createdBy', 'username')
+      .sort({ createdAt: -1 });
+    res.json(pending);
+  })
+);
+
+const setStatus = (status: 'approved' | 'rejected') =>
+  asyncHandler(async (req, res) => {
+    if (!isObjectId(req.params.id)) throw new HttpError(404, 'Problem not found');
+    const problem = await Problem.findByIdAndUpdate(req.params.id, { status }, { new: true });
+    if (!problem) throw new HttpError(404, 'Problem not found');
+    res.json({ _id: problem._id, status: problem.status });
+  });
+
+router.patch('/admin/:id/approve', authenticateToken, requireAdmin, setStatus('approved'));
+router.patch('/admin/:id/reject', authenticateToken, requireAdmin, setStatus('rejected'));
+
+router.get(
+  '/:id',
+  optionalAuth,
+  asyncHandler(async (req: AuthRequest, res) => {
+    if (!isObjectId(req.params.id)) throw new HttpError(404, 'Problem not found');
+    const problem = await Problem.findById(req.params.id).lean();
+    if (!problem) throw new HttpError(404, 'Problem not found');
+
+    if (problem.status !== 'approved') {
+      const isOwner = req.user && problem.createdBy?.toString() === req.user.userId;
+      if (!isOwner && !(await isUserAdmin(req.user?.userId))) throw new HttpError(404, 'Problem not found');
     }
 
-    res.json(problem);
-  } catch (error) {
-    res.status(500).json({ message: 'Error updating problem', error: (error as Error).message });
-  }
-});
+    res.json(toPublicProblem(problem));
+  })
+);
 
-// Delete problem (admin only)
-router.delete('/:id', authenticateToken, async (req, res) => {
-  try {
+// Any user can contribute a problem; it stays pending until an admin approves it.
+router.post(
+  '/',
+  authenticateToken,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const data = validateProblemInput(req.body);
+    const problem = await Problem.create({ ...data, createdBy: req.user!.userId, status: 'pending' });
+    res.status(201).json({ _id: problem._id, title: problem.title, status: problem.status });
+  })
+);
+
+router.put(
+  '/:id',
+  authenticateToken,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    if (!isObjectId(req.params.id)) throw new HttpError(404, 'Problem not found');
+    const data = validateProblemInput(req.body);
+    const problem = await Problem.findByIdAndUpdate(req.params.id, data, { new: true, runValidators: true });
+    if (!problem) throw new HttpError(404, 'Problem not found');
+    res.json(problem);
+  })
+);
+
+router.delete(
+  '/:id',
+  authenticateToken,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    if (!isObjectId(req.params.id)) throw new HttpError(404, 'Problem not found');
     const problem = await Problem.findByIdAndDelete(req.params.id);
+    if (!problem) throw new HttpError(404, 'Problem not found');
+    res.json({ message: 'Problem deleted' });
+  })
+);
 
-    if (!problem) {
-      return res.status(404).json({ message: 'Problem not found' });
-    }
-
-    res.json({ message: 'Problem deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error deleting problem', error: (error as Error).message });
-  }
-});
-
-// Admin: Get all pending problems
-router.get('/admin/pending', authenticateToken, isAdmin, async (req, res) => {
-  // TODO: Add admin check here
-  try {
-    const pendingProblems = await Problem.find({ status: 'pending' }).sort({ createdAt: -1 });
-    res.json(pendingProblems);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching pending problems', error: (error as Error).message });
-  }
-});
-
-// Admin: Approve a problem
-router.patch('/admin/:id/approve', authenticateToken, isAdmin, async (req, res) => {
-  // TODO: Add admin check here
-  try {
-    const problem = await Problem.findByIdAndUpdate(
-      req.params.id,
-      { status: 'approved' },
-      { new: true }
-    );
-    if (!problem) {
-      return res.status(404).json({ message: 'Problem not found' });
-    }
-    res.json(problem);
-  } catch (error) {
-    res.status(500).json({ message: 'Error approving problem', error: (error as Error).message });
-  }
-});
-
-// Admin: Reject a problem
-router.patch('/admin/:id/reject', authenticateToken, isAdmin, async (req, res) => {
-  // TODO: Add admin check here
-  try {
-    const problem = await Problem.findByIdAndUpdate(
-      req.params.id,
-      { status: 'rejected' },
-      { new: true }
-    );
-    if (!problem) {
-      return res.status(404).json({ message: 'Problem not found' });
-    }
-    res.json(problem);
-  } catch (error) {
-    res.status(500).json({ message: 'Error rejecting problem', error: (error as Error).message });
-  }
-});
-
-export default router; 
+export default router;
