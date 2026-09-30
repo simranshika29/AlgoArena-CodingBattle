@@ -232,9 +232,23 @@ const Layout: React.FC = () => {
             <Typography variant="body2" color="text.secondary">
               AlgoArena · practice DSA, then prove it in a duel.
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Built with React, Express, MongoDB and Socket.io
-            </Typography>
+            <Box sx={{ display: 'flex', gap: 2.5 }}>
+              <Box component={RouterLink} to="/privacy" sx={{ color: 'text.secondary', fontSize: '0.875rem', '&:hover': { color: 'text.primary' } }}>
+                Privacy
+              </Box>
+              <Box component={RouterLink} to="/terms" sx={{ color: 'text.secondary', fontSize: '0.875rem', '&:hover': { color: 'text.primary' } }}>
+                Terms
+              </Box>
+              <Box
+                component="a"
+                href="https://github.com/simranshika29/AlgoArena-CodingBattle"
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{ color: 'text.secondary', fontSize: '0.875rem', '&:hover': { color: 'text.primary' } }}
+              >
+                GitHub
+              </Box>
+            </Box>
           </Container>
         </Box>
       )}

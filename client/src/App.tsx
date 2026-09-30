@@ -23,6 +23,8 @@ const Contribute = lazy(() => import('./pages/Contribute'));
 const Practice = lazy(() => import('./pages/Practice'));
 const PracticeSetPage = lazy(() => import('./pages/PracticeSetPage'));
 const AdminReview = lazy(() => import('./pages/AdminReview'));
+const Privacy = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Privacy })));
+const Terms = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Terms })));
 
 const MyProfileRedirect: React.FC = () => {
   const { user } = useAuth();
@@ -45,6 +47,8 @@ const App: React.FC = () => (
                 <Route path="problems/:id" element={<ProblemDetail />} />
                 <Route path="leaderboard" element={<Leaderboard />} />
                 <Route path="u/:username" element={<Profile />} />
+                <Route path="privacy" element={<Privacy />} />
+                <Route path="terms" element={<Terms />} />
 
                 <Route path="dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
                 <Route path="profile" element={<RequireAuth><MyProfileRedirect /></RequireAuth>} />
