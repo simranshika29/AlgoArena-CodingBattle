@@ -9,6 +9,11 @@
   Solve DSA problems in the browser, get judged against hidden test cases in a sandbox, and race a friend to the first accepted solution.
 </p>
 
+<p align="center">
+  <a href="https://algoarena-codingbattle.vercel.app"><strong>Live demo</strong></a> ·
+  <a href="https://algoarena-api.onrender.com/api/health">API health</a>
+</p>
+
 ---
 
 ## Features
@@ -207,6 +212,8 @@ The API needs a long-running process for WebSockets, so it runs on **Render**; t
 3. **Seed**: run `npm run seed` locally with `MONGODB_URI` pointing at Atlas, or `npm run seed:prod` in the Render shell.
 4. **Frontend on Vercel**: import the repository with **Root Directory = `client`** (or run `vercel deploy --prod` from `client/`), and set `REACT_APP_API_URL` to the Render URL (for example `https://algoarena-api.onrender.com`). `client/vercel.json` rewrites all routes to `index.html` so deep links work.
 5. Update `CORS_ORIGIN` on Render if the Vercel domain changes.
+
+Live deployment: frontend https://algoarena-codingbattle.vercel.app (auto-deploys from `main`), API https://algoarena-api.onrender.com (auto-deploys from `main`), MongoDB Atlas free cluster.
 
 Notes: Render's free tier sleeps after inactivity (the first request can take about 30 s). The public Judge0 CE instance is rate-limited and intended for demos; for real traffic, use a RapidAPI key or self-host Judge0 and set `JUDGE0_URL`/`JUDGE0_API_KEY`.
 
